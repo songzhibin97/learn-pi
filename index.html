@@ -959,7 +959,7 @@ function renderStep(){
     html+='<h2>🎯 关卡 '+(curCh+1)+' 通关测验</h2>';
     html+='<p style="color:var(--dim);font-size:13px">答对即可通关，解锁下一关并获得 100 XP。</p>';
     html+='<div class="quiz-q">'+q.q+'</div>';
-    html+=q.opts.map((o,i)=>'<label class="quiz-opt" data-i="'+i+'">'+o+'</label>').join("");
+    html+=shuffle(q.opts.map((_,i)=>i)).map((i)=>'<label class="quiz-opt" data-i="'+i+'">'+q.opts[i]+'</label>').join("");
     html+='<div class="quiz-fb"></div>';
     html+='<div class="btn-row"><button class="btn btn-primary" id="qzSubmit" disabled>提交答案</button></div>';
     html+='<div class="celebrate" id="celebrate"><div class="big">🎉</div>'+
@@ -1011,34 +1011,46 @@ function renderStep(){
 }
 
 /* ========== 测验 ========== */
+/** Fisher–Yates 洗牌：测验选项每次渲染都随机排序 */
+function shuffle(arr){
+  const a=arr.slice();
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    const t=a[i];a[i]=a[j];a[j]=t;
+  }
+  return a;
+}
+
 function bindQuiz(ch){
   const q=QUIZZES[ch.id];
-  const opts=document.querySelectorAll(".quiz-opt");
+  // 选项在 DOM 里是乱序的；data-i 仍是题目原始索引。判分靠 data-i 与 q.answer 匹配，不看位置。
+  const opts=[...document.querySelectorAll(".quiz-opt")];
   const fb=document.querySelector(".quiz-fb");
   const submit=document.getElementById("qzSubmit");
   const cele=document.getElementById("celebrate");
-  let picked=-1, locked=false;
+  const correctEl=opts.find((o)=>+o.dataset.i===q.answer);
+  let pickedEl=null, locked=false;
 
   if(progress[ch.id]){
     // 已通关：直接展示答案与庆祝
-    opts[q.answer].classList.add("correct");
+    correctEl.classList.add("correct");
     fb.className="quiz-fb ok";fb.textContent="✓ "+q.explain;
     submit.style.display="none";
     cele.classList.add("show");
     locked=true;
   }
-  opts.forEach(o=>{
+  opts.forEach((o)=>{
     o.onclick=()=>{
       if(locked)return;
-      opts.forEach(x=>x.classList.remove("sel"));
-      o.classList.add("sel");picked=+o.dataset.i;submit.disabled=false;
+      opts.forEach((x)=>x.classList.remove("sel"));
+      o.classList.add("sel");pickedEl=o;submit.disabled=false;
     };
   });
   submit.onclick=()=>{
-    if(picked<0||locked)return;
-    if(picked===q.answer){
+    if(!pickedEl||locked)return;
+    if(+pickedEl.dataset.i===q.answer){
       locked=true;
-      opts[q.answer].classList.add("correct");
+      correctEl.classList.add("correct");
       fb.className="quiz-fb ok";fb.textContent="✓ 正确！"+q.explain;
       submit.style.display="none";
       const wasDone=!!progress[ch.id];
@@ -1049,11 +1061,11 @@ function bindQuiz(ch){
       // 刷新底部导航（解锁"下一关"按钮）
       renderStep();
     }else{
-      opts[picked].classList.add("wrong");
+      pickedEl.classList.add("wrong");
       fb.className="quiz-fb no";fb.textContent="✗ 再想想。"+q.explain;
       setTimeout(()=>{
-        opts.forEach(x=>x.classList.remove("wrong","sel"));
-        fb.className="quiz-fb";picked=-1;submit.disabled=true;
+        opts.forEach((x)=>x.classList.remove("wrong","sel"));
+        fb.className="quiz-fb";pickedEl=null;submit.disabled=true;
       },1800);
     }
   };
