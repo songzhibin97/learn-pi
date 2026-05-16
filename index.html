@@ -1,0 +1,1517 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pi 闯关教程 · 一个 AI Agent 是怎么跑起来的</title>
+<style>
+  /* ===== 主题变量：默认浅色，body.dark 切换为深色 ===== */
+  :root{
+    --bg:#eceff3; --panel:#ffffff; --panel2:#f3f5f8; --border:#d8dee4;
+    --txt:#1f2328; --dim:#656d76; --accent:#0969da; --accent2:#1a7f37;
+    --warn:#9a6700; --pink:#bf3989; --kw:#cf222e; --str:#0a3069;
+    --com:#6e7781; --type:#0550ae; --code-bg:#f6f8fa;
+    --shadow:0 1px 3px rgba(140,149,159,.25),0 6px 18px rgba(140,149,159,.16);
+    --radius:14px;
+  }
+  body.dark{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --border:#2d3543;
+    --txt:#c9d1d9; --dim:#8b949e; --accent:#58a6ff; --accent2:#7ee787;
+    --warn:#e3b341; --pink:#f778ba; --kw:#ff7b72; --str:#a5d6ff;
+    --com:#7d8590; --type:#79c0ff; --code-bg:#0a0d12;
+    --shadow:0 1px 3px rgba(0,0,0,.5),0 8px 24px rgba(0,0,0,.4);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  html{scrollbar-gutter:stable;}
+  body{
+    background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:clamp(17px,1.2vw,20px);line-height:1.85;transition:background .25s,color .25s;
+  }
+  code,pre,.mono{font-family:"SF Mono",Menlo,Consolas,"Courier New",monospace;}
+  .layout{display:flex;min-height:100vh;}
+
+  /* ================= 侧边栏 ================= */
+  .sidebar{
+    width:288px;flex-shrink:0;background:var(--panel);
+    border-right:1px solid var(--border);
+    position:sticky;top:0;height:100vh;overflow-y:auto;
+    display:flex;flex-direction:column;
+  }
+  .brand{padding:20px 22px 14px;}
+  .brand-row{display:flex;justify-content:space-between;align-items:flex-start;}
+  .brand h1{font-size:18px;color:var(--txt);letter-spacing:.3px;}
+  .brand p{font-size:12px;color:var(--dim);margin-top:3px;}
+  .theme-btn{
+    background:var(--panel2);border:1px solid var(--border);color:var(--txt);
+    width:34px;height:34px;border-radius:9px;cursor:pointer;font-size:15px;
+    flex-shrink:0;transition:all .15s;
+  }
+  .theme-btn:hover{border-color:var(--accent);}
+
+  /* XP 面板 */
+  .xp-panel{margin:4px 22px 12px;background:var(--panel2);border:1px solid var(--border);
+    border-radius:11px;padding:11px 13px;}
+  .xp-top{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);margin-bottom:6px;}
+  .xp-top b{color:var(--accent2);}
+  .xp-bar{height:8px;background:var(--bg);border-radius:4px;overflow:hidden;}
+  .xp-fill{height:100%;width:0;border-radius:4px;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .5s;}
+  .xp-stars{margin-top:7px;font-size:13px;letter-spacing:1px;color:var(--warn);}
+
+  /* 关卡列表 */
+  .levels{padding:6px 0 20px;flex:1;}
+  .lv-label{font-size:11px;color:var(--dim);text-transform:uppercase;
+    letter-spacing:1px;padding:6px 22px;}
+  .lv-item{
+    display:flex;align-items:center;gap:11px;padding:9px 22px;cursor:pointer;
+    border-left:3px solid transparent;transition:background .15s;
+  }
+  .lv-item:hover{background:var(--panel2);}
+  .lv-item.active{background:var(--panel2);border-left-color:var(--accent);}
+  .lv-item.locked{cursor:not-allowed;opacity:.5;}
+  .lv-node{
+    flex-shrink:0;width:28px;height:28px;border-radius:9px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:13px;font-weight:700;
+    background:var(--panel2);border:1.5px solid var(--border);color:var(--dim);
+  }
+  .lv-item.active .lv-node{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .lv-item.done .lv-node{background:var(--accent2);color:#fff;border-color:var(--accent2);}
+  .lv-txt b{font-size:13.5px;font-weight:600;display:block;color:var(--txt);}
+  .lv-txt span{font-size:11.5px;color:var(--dim);}
+  .lv-item.locked .lv-txt b{color:var(--dim);}
+
+  /* ================= 主区 ================= */
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;
+    padding:36px clamp(22px,5vw,72px) 0;}
+  .stage{width:100%;max-width:1080px;}
+
+  /* 顶部进度条 */
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+  .crumb{font-size:13px;color:var(--dim);}
+  .crumb b{color:var(--accent);}
+  .dots{display:flex;gap:7px;}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--border);
+    cursor:pointer;transition:all .15s;}
+  .dot:hover{transform:scale(1.25);}
+  .dot.cur{background:var(--accent);transform:scale(1.3);}
+  .dot.past{background:var(--accent2);}
+
+  /* 步骤卡片 */
+  .card{background:var(--panel);border:1px solid var(--border);
+    border-radius:var(--radius);box-shadow:var(--shadow);
+    padding:clamp(30px,3.6vw,56px) clamp(32px,4.2vw,64px);
+    min-height:calc(100vh - 130px);
+    animation:slide .32s ease;}
+  @keyframes slide{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
+  .step-kicker{font-size:0.8em;color:var(--accent);font-weight:600;
+    letter-spacing:.5px;margin-bottom:10px;}
+  .card h2{font-size:clamp(27px,2.7vw,39px);color:var(--txt);margin-bottom:18px;line-height:1.36;}
+  .card h3{font-size:clamp(20px,1.8vw,26px);color:var(--txt);margin:26px 0 10px;}
+  .card h4{font-size:1.05em;color:var(--accent2);margin:18px 0 6px;}
+  .card p{margin:14px 0;}
+  .card a{color:var(--accent);}
+  .card ul,.card ol{margin:11px 0 11px 24px;}
+  .card li{margin:6px 0;}
+  strong{color:var(--txt);font-weight:700;}
+  em{color:var(--warn);font-style:normal;font-weight:600;}
+  .ic{background:var(--panel2);border:1px solid var(--border);border-radius:5px;
+    padding:1px 6px;font-size:13px;color:var(--type);
+    font-family:"SF Mono",Menlo,monospace;}
+
+  .note{border-left:3px solid var(--warn);background:rgba(154,103,0,.08);
+    padding:13px 18px;border-radius:0 8px 8px 0;margin:18px 0;font-size:0.92em;}
+  body.dark .note{background:rgba(227,179,65,.08);}
+  .note b{color:var(--warn);}
+  .keytake{border-left:3px solid var(--accent2);background:rgba(26,127,55,.08);
+    padding:13px 18px;border-radius:0 8px 8px 0;margin:18px 0;font-size:0.92em;}
+  body.dark .keytake{background:rgba(126,231,135,.09);}
+  .keytake b{color:var(--accent2);}
+  .bigidea{background:var(--panel2);border:1px dashed var(--accent);
+    border-radius:10px;padding:20px 22px;margin:20px 0;text-align:center;
+    font-size:1.02em;line-height:2;color:var(--accent);}
+
+  /* 代码块 */
+  .codewrap{margin:14px 0;border:1px solid var(--border);border-radius:9px;overflow:hidden;}
+  .codehead{background:var(--panel2);padding:6px 13px;font-size:11px;
+    color:var(--dim);display:flex;justify-content:space-between;
+    border-bottom:1px solid var(--border);}
+  .codehead .src{color:var(--accent);}
+  pre.code{background:var(--code-bg);padding:16px 18px;overflow-x:auto;
+    font-size:clamp(13.5px,1vw,16px);line-height:1.72;}
+  .codenote{background:var(--panel2);border-top:1px solid var(--border);
+    padding:10px 16px;font-size:0.88em;color:var(--dim);line-height:1.7;}
+  .codenote b{color:var(--accent2);}
+  .c-kw{color:var(--kw);} .c-str{color:var(--str);}
+  .c-com{color:var(--com);font-style:italic;} .c-type{color:var(--type);}
+
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:0.92em;}
+  th,td{border:1px solid var(--border);padding:9px 13px;text-align:left;}
+  th{background:var(--panel2);color:var(--txt);}
+  td code{color:var(--type);font-size:0.92em;}
+
+  /* 控件 */
+  .btn{background:var(--panel2);color:var(--txt);border:1px solid var(--border);
+    padding:9px 18px;border-radius:8px;cursor:pointer;font-size:0.92em;
+    transition:all .15s;font-family:inherit;}
+  .btn:hover:not(:disabled){border-color:var(--accent);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .btn-primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;}
+  .btn-primary:hover:not(:disabled){filter:brightness(1.1);}
+  .btn-warn{background:var(--warn);color:#fff;border-color:var(--warn);font-weight:600;}
+  .btn-row{display:flex;gap:9px;flex-wrap:wrap;margin:12px 0;}
+  input[type=text],textarea,select{
+    background:var(--code-bg);border:1px solid var(--border);color:var(--txt);
+    border-radius:6px;padding:7px 10px;font-size:13.5px;font-family:inherit;width:100%;}
+  label.fld{display:block;font-size:12px;color:var(--dim);margin:9px 0 4px;}
+
+  /* Demo 容器 */
+  .demo{background:var(--panel2);border:1px solid var(--accent);
+    border-radius:11px;margin:14px 0;overflow:hidden;}
+  .demo-head{background:rgba(9,105,218,.1);padding:10px 18px;font-size:0.86em;
+    color:var(--accent);font-weight:600;border-bottom:1px solid var(--border);}
+  body.dark .demo-head{background:rgba(88,166,255,.12);}
+  .demo-body{padding:15px;}
+  .demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  @media(max-width:760px){.demo-grid{grid-template-columns:1fr;}}
+  .pane{background:var(--panel);border:1px solid var(--border);border-radius:8px;
+    padding:11px;min-height:110px;}
+  .pane-title{font-size:0.74em;color:var(--dim);text-transform:uppercase;
+    letter-spacing:.5px;margin-bottom:7px;}
+
+  .msg{border-radius:8px;padding:9px 13px;margin:7px 0;font-size:0.84em;
+    border:1px solid var(--border);animation:fade .25s;}
+  @keyframes fade{from{opacity:0;}to{opacity:1;}}
+  .msg .role{font-size:10px;text-transform:uppercase;letter-spacing:.5px;
+    font-weight:700;margin-bottom:3px;display:block;}
+  .msg-user{background:rgba(9,105,218,.08);} .msg-user .role{color:var(--accent);}
+  .msg-assistant{background:rgba(26,127,55,.08);} .msg-assistant .role{color:var(--accent2);}
+  .msg-tool{background:rgba(191,57,137,.08);} .msg-tool .role{color:var(--pink);}
+  .msg-system{background:rgba(154,103,0,.09);} .msg-system .role{color:var(--warn);}
+  .msg-steer{background:rgba(154,103,0,.16);border-color:var(--warn);} .msg-steer .role{color:var(--warn);}
+  .msg .think{color:var(--com);font-style:italic;font-size:11.5px;
+    border-left:2px solid var(--border);padding-left:7px;margin:4px 0;}
+  .msg .tcall{color:var(--pink);font-family:"SF Mono",monospace;font-size:11.5px;}
+
+  .evt{display:flex;gap:7px;align-items:center;padding:4px 8px;font-size:0.76em;
+    border-radius:5px;margin:3px 0;font-family:"SF Mono",monospace;animation:fade .2s;}
+  .evt-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+  .evt-agent{background:rgba(9,105,218,.1);} .evt-agent .evt-dot{background:var(--accent);}
+  .evt-turn{background:rgba(26,127,55,.1);} .evt-turn .evt-dot{background:var(--accent2);}
+  .evt-msg{background:var(--panel2);} .evt-msg .evt-dot{background:var(--dim);}
+  .evt-tool{background:rgba(191,57,137,.1);} .evt-tool .evt-dot{background:var(--pink);}
+
+  .arch{display:flex;flex-direction:column;gap:7px;margin:14px 0;}
+  .arch-layer{border:1px solid var(--border);border-radius:9px;padding:12px 15px;
+    cursor:pointer;transition:all .15s;background:var(--panel);}
+  .arch-layer:hover{border-color:var(--accent);transform:translateX(4px);}
+  .arch-layer.sel{border-color:var(--accent);background:var(--panel2);}
+  .arch-layer .al-name{font-size:1em;color:var(--txt);font-weight:600;}
+  .arch-layer .al-name code{color:var(--type);font-size:0.9em;}
+  .arch-layer .al-role{font-size:0.84em;color:var(--dim);margin-top:3px;}
+  .arch-detail{background:var(--panel);border:1px solid var(--accent);border-radius:9px;
+    padding:15px 18px;margin-top:10px;font-size:0.92em;min-height:54px;}
+  .arch-arrow{text-align:center;color:var(--dim);font-size:12px;}
+
+  .badge{display:inline-block;font-size:10.5px;padding:2px 8px;border-radius:11px;
+    font-family:"SF Mono",monospace;}
+  .b-blue{background:rgba(9,105,218,.15);color:var(--accent);}
+  .b-green{background:rgba(26,127,55,.15);color:var(--accent2);}
+  .b-pink{background:rgba(191,57,137,.15);color:var(--pink);}
+  .b-gray{background:var(--panel2);color:var(--dim);}
+
+  .stepline{display:flex;gap:6px;flex-wrap:wrap;margin:11px 0;}
+  .step-chip{font-size:0.78em;padding:4px 11px;border-radius:13px;background:var(--panel);
+    border:1px solid var(--border);color:var(--dim);}
+  .step-chip.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;}
+  .phase-box{font-size:0.86em;background:var(--panel);border:1px solid var(--border);
+    border-radius:7px;padding:11px 13px;margin:10px 0;}
+  .phase-box b{color:var(--accent);}
+  .hint{font-size:0.84em;color:var(--dim);margin-top:6px;}
+  .pulse{animation:pulse 1s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.45;}}
+  .cursor-blink::after{content:"▋";color:var(--accent2);animation:pulse .8s infinite;}
+
+  /* Quiz */
+  .quiz-q{font-size:1.18em;color:var(--txt);margin:8px 0 14px;font-weight:600;}
+  .quiz-opt{display:block;padding:13px 17px;margin:9px 0;border:1.5px solid var(--border);
+    border-radius:9px;cursor:pointer;font-size:1em;transition:all .12s;background:var(--panel);}
+  .quiz-opt:hover{border-color:var(--accent);}
+  .quiz-opt.sel{border-color:var(--accent);background:var(--panel2);}
+  .quiz-opt.correct{border-color:var(--accent2);background:rgba(26,127,55,.13);}
+  .quiz-opt.wrong{border-color:var(--kw);background:rgba(207,34,46,.12);}
+  .quiz-fb{margin-top:12px;font-size:13.5px;padding:11px 13px;border-radius:8px;display:none;}
+  .quiz-fb.ok{display:block;background:rgba(26,127,55,.12);color:var(--accent2);}
+  .quiz-fb.no{display:block;background:rgba(207,34,46,.12);color:var(--kw);}
+
+  /* 通关庆祝 */
+  .celebrate{margin-top:16px;text-align:center;padding:20px;
+    border:2px solid var(--accent2);border-radius:12px;
+    background:rgba(26,127,55,.08);animation:pop .4s ease;display:none;}
+  .celebrate.show{display:block;}
+  @keyframes pop{0%{transform:scale(.85);opacity:0;}60%{transform:scale(1.04);}100%{transform:scale(1);opacity:1;}}
+  .celebrate .big{font-size:34px;}
+  .celebrate .ttl{font-size:18px;color:var(--accent2);font-weight:700;margin:6px 0;}
+  .celebrate .xp{font-size:13px;color:var(--dim);}
+
+  /* 底部导航 —— 吸附在视口底部，无论内容多高，「下一步」位置恒定 */
+  .footer{display:flex;justify-content:space-between;
+    position:sticky;bottom:0;z-index:5;
+    background:var(--bg);padding:14px 0 12px;margin-top:6px;}
+
+  /* toast */
+  .toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--txt);color:var(--bg);padding:10px 20px;border-radius:9px;
+    font-size:13px;opacity:0;transition:all .25s;pointer-events:none;z-index:50;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  /* ===== 窄屏自适应：侧边栏折叠到顶部 ===== */
+  @media(max-width:880px){
+    .layout{flex-direction:column;}
+    .sidebar{width:100%;height:auto;position:static;
+      border-right:none;border-bottom:1px solid var(--border);}
+    .levels{flex:none;}
+    .lv-label{padding-top:2px;}
+    #levelList{display:flex;overflow-x:auto;gap:5px;padding:0 16px 6px;}
+    .lv-item{flex-direction:column;align-items:center;gap:5px;
+      border-left:none;border-bottom:3px solid transparent;
+      min-width:108px;padding:9px 8px;text-align:center;}
+    .lv-item.active{border-bottom-color:var(--accent);}
+    .lv-txt span{display:none;}
+    .main{padding:24px 16px 0;}
+    .card{min-height:0;}
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-row">
+        <div><h1>pi · 闯关教程</h1><p>一个 AI Agent 是怎么跑起来的</p></div>
+        <button class="theme-btn" id="themeBtn" title="切换主题">☀</button>
+      </div>
+    </div>
+    <div class="xp-panel">
+      <div class="xp-top"><span>经验值</span><span><b id="xpNum">0</b> / 800 XP</span></div>
+      <div class="xp-bar"><div class="xp-fill" id="xpFill"></div></div>
+      <div class="xp-stars" id="xpStars"></div>
+    </div>
+    <div class="levels">
+      <div class="lv-label">关卡 · 通关后解锁下一关</div>
+      <div id="levelList"></div>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="stage" id="stage"></div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+/* ========== 语法高亮 ========== */
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function highlight(code){
+  const re=/(\/\/[^\n]*)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|\b(const|let|var|function|return|if|else|for|while|await|async|type|interface|export|import|from|new|class|extends|implements|of|in|true|false|null|undefined|void|typeof|case|switch|break|continue|throw|try|catch|as|readonly|public|private)\b|\b([A-Z][A-Za-z0-9_]*)\b/g;
+  let last=0,out="",m;
+  while((m=re.exec(code))){
+    out+=esc(code.slice(last,m.index));
+    if(m[1])out+='<span class="c-com">'+esc(m[1])+"</span>";
+    else if(m[2])out+='<span class="c-str">'+esc(m[2])+"</span>";
+    else if(m[3])out+='<span class="c-kw">'+esc(m[3])+"</span>";
+    else if(m[4])out+='<span class="c-type">'+esc(m[4])+"</span>";
+    last=re.lastIndex;
+  }
+  return out+esc(code.slice(last));
+}
+function codeBlock(code,source,plain){
+  return '<div class="codewrap"><div class="codehead"><span>TypeScript</span>'+
+    '<span class="src">'+esc(source||"")+'</span></div>'+
+    '<pre class="code">'+highlight(code.trim())+"</pre>"+
+    (plain?'<div class="codenote"><b>📖 人话</b> —— '+plain+'</div>':'')+
+    "</div>";
+}
+
+/* ========== pi 真实源码片段 ========== */
+const SRC={};
+SRC.context=`// LLM 看到的全部信息 = 一个 Context 对象
+const context: Context = {
+  systemPrompt: "You are a helpful assistant.",
+  messages: [
+    { role: "user", content: "现在几点了？" }
+  ],
+  tools
+};
+
+// complete() 把 Context 发给模型，返回下一条 assistant 消息
+const response = await complete(model, context);`;
+
+SRC.stream=`const s = stream(model, context);
+
+for await (const event of s) {
+  switch (event.type) {
+    case "thinking_delta": // 思考内容的一个增量片段
+    case "text_delta":     // 正文的一个增量片段
+      process.stdout.write(event.delta);
+      break;
+    case "toolcall_end":   // 一个完整的工具调用已解析好
+      console.log(event.toolCall.name);
+      break;
+    case "done":           // 流结束
+      break;
+  }
+}
+const finalMessage = await s.result();`;
+
+SRC.tool=`// AgentTool：告诉 LLM "你可以请求我做这件事"
+export interface AgentTool<TParameters extends TSchema = TSchema>
+  extends Tool<TParameters> {
+  label: string;
+  // execute：真正干活的函数 —— 由你的程序执行，不是 LLM
+  execute: (
+    toolCallId: string,
+    params: Static<TParameters>,   // 已按 schema 校验过的参数
+    signal?: AbortSignal,
+  ) => Promise<AgentToolResult<TDetails>>;
+}`;
+
+SRC.toolflow=`// 一轮工具调用的三步
+// 1. LLM 返回的 assistant 消息里含 toolCall
+const toolCalls = message.content.filter((c) => c.type === "toolCall");
+
+// 2. 你的程序执行工具
+const result = await tool.execute(call.id, call.arguments);
+
+// 3. 把结果作为 toolResult 回填进 context，再调一次 LLM
+context.messages.push({
+  role: "toolResult",
+  toolCallId: call.id,
+  content: result.content,
+  isError: false,
+  timestamp: Date.now(),
+});`;
+
+SRC.runloop=`async function runLoop(context, config, emit) {
+  // 外层循环：负责 follow-up（关卡 7 再讲，先忽略）
+  while (true) {
+    let hasMoreToolCalls = true;
+
+    // 内层循环：只要上一轮还有 toolCall，就继续转
+    while (hasMoreToolCalls) {
+      // ① 调一次 LLM，产出一条 assistant 消息
+      const message = await streamAssistantResponse(context, config);
+
+      // ② 从这条消息里取出所有 toolCall
+      const toolCalls = message.content.filter((c) => c.type === "toolCall");
+
+      if (toolCalls.length > 0) {
+        // ③ 执行工具，把 toolResult 回填进 context
+        const results = await executeToolCalls(context, message);
+        for (const r of results) context.messages.push(r);
+        hasMoreToolCalls = true;     // 有工具调用 → 内层继续转
+      } else {
+        hasMoreToolCalls = false;    // ④ 没有 toolCall → 内层退出
+      }
+      await emit({ type: "turn_end", message });
+    }
+
+    // 内层退出后：有 follow-up 就再来一轮，否则整体结束
+    if (!hasFollowUp(config)) break;
+  }
+  await emit({ type: "agent_end" });
+}`;
+
+SRC.event=`export type AgentEvent =
+  | { type: "agent_start" }
+  | { type: "agent_end"; messages: AgentMessage[] }
+  // 一个 turn = 一次 LLM 调用 + 它触发的工具执行
+  | { type: "turn_start" }
+  | { type: "turn_end"; message: AgentMessage; toolResults: ToolResultMessage[] }
+  // 消息生命周期（user / assistant / toolResult 都会发）
+  | { type: "message_start"; message: AgentMessage }
+  // message_update 只在 assistant 流式输出时发
+  | { type: "message_update"; message: AgentMessage; assistantMessageEvent: ... }
+  | { type: "message_end"; message: AgentMessage }
+  // 工具执行生命周期
+  | { type: "tool_execution_start"; toolCallId: string; toolName: string }
+  | { type: "tool_execution_end"; toolCallId: string; result: any; isError: boolean };`;
+
+SRC.convert=`// LLM 只认识 user / assistant / toolResult 三种消息
+// convertToLlm：每次调 LLM 前，把 AgentMessage[] 过滤成 LLM 能懂的 Message[]
+const agent = new Agent({
+  convertToLlm: (messages) => messages.flatMap((m) => {
+    if (m.role === "notification") return [];   // UI-only 消息，丢弃
+    return [m];                                  // 标准消息，原样传
+  }),
+  // transformContext：在 convertToLlm 之前运行，用于剪枝/压缩超长上下文
+  transformContext: async (messages) => {
+    if (estimateTokens(messages) > MAX) return prune(messages);
+    return messages;
+  },
+});`;
+
+SRC.steer=`// Agent 正在跑时：把消息塞进 steering 队列（运行中插话）
+agent.steer({ role: "user", content: "停，改成这样做", timestamp: Date.now() });
+
+// Agent 本该停下后：再追加一轮（散会前补一句）
+agent.followUp({ role: "user", content: "顺便也总结一下", timestamp: Date.now() });`;
+
+SRC.hooks=`// 工具执行前的“安检”：返回 block:true 就拦下这次调用
+beforeToolCall: async ({ toolCall }) => {
+  if (toolCall.name === "bash") {
+    return { block: true, reason: "bash 已禁用" };
+  }
+}
+
+// 工具执行后的“质检”：可以改写结果，或叫停 loop
+afterToolCall: async ({ result, isError }) => {
+  if (isError) return { content: [{ type: "text", text: "工具出错，已忽略" }] };
+}`;
+
+/* ========== 数据 ========== */
+const ARCH=[
+  {name:"pi-tui &nbsp;/&nbsp; pi-web-ui",role:"UI 层 · 终端界面 / 网页组件",
+   detail:"<b>呈现层。</b>订阅 Agent 发出的事件，把对话、思考、工具执行实时画到屏幕上。本质是“事件的消费者”。"},
+  {name:"pi-coding-agent",role:"成品层 · 交互式编程 Agent CLI",
+   detail:"<b>整车。</b>把下面的通用引擎装配成能用的编程助手：内置 bash / 读写文件等工具、写好 system prompt、加 skills、上下文压缩、会话持久化。你在终端运行的 <span class='ic'>pi</span> 命令就是它。"},
+  {name:"pi-agent-core",role:"引擎层 · Agent 运行时",
+   detail:"<b>引擎。</b>本教程主角。核心是 <span class='ic'>agent loop</span> —— 反复“调 LLM → 执行工具 → 回填结果”直到任务完成。还管状态、事件广播、steering。"},
+  {name:"pi-ai",role:"地基层 · 统一多 provider LLM 接口",
+   detail:"<b>地基。</b>把 OpenAI / Anthropic / Google 等几十家 provider 抹平成一套 API：<span class='ic'>stream()</span> / <span class='ic'>complete()</span>、统一消息格式、统一流式事件。上面所有层都站在它之上。"},
+];
+const ASSEMBLY=[
+  {k:"系统提示词（system prompt）",d:"一段写给模型的“岗位说明书”——规定它的行为、工具使用规范、输出风格。agent-core 不带提示词，coding-agent 才把它写好装上。"},
+  {k:"内置工具集",d:"agent-core 只定义了“工具长什么样”的接口（关卡 4 的 AgentTool），不带任何具体工具。coding-agent 才真正实现了 bash（跑命令）、读文件、写 / 改文件等能操作代码库的工具。"},
+  {k:"技能插件（skills）",d:"可按需加载的“技能”——用一个 Markdown 文件加一点配置就能定义（比如 /review 代码审查、/security-review 安全审查），让 Agent 的能力可以随时扩展。"},
+  {k:"上下文压缩（compaction）",d:"对话太长会撑爆上下文窗口（关卡 7 讲过）。compaction 在合适时机把旧消息总结压缩 —— 用的正是关卡 7 的 transformContext。"},
+  {k:"会话存档（session）",d:"把整个对话（Context）存成文件。于是关掉程序后还能恢复进度、回看历史会话。"},
+  {k:"斜杠命令 & 配置",d:"斜杠命令、选模型、登录各家模型账号、改快捷键…… 这些交互层的杂事，把引擎包装成一个顺手好用的命令行工具。"},
+];
+const C4_TASKS=[
+  { name:"修复一个 bug", user:"修复 utils.ts 里的空指针 bug",
+    turns:[
+      {think:"先看一下出问题的文件。",text:"我先读取 utils.ts。",tool:{name:"read_file",args:'{ path: "utils.ts" }'},result:"function getName(u){ return u.name; }  // u 可能为 null"},
+      {think:"问题清楚了，需要加空值判断。",text:"我来加上空值保护。",tool:{name:"edit_file",args:'{ path: "utils.ts", ... }'},result:'已写入：return u?.name ?? "";'},
+      {think:"修复完成，可以收尾。",text:"已修复 utils.ts：对 u 做了空值保护。任务完成。",tool:null,result:null},
+    ]},
+  { name:"读 config.json 并总结", user:"读一下 config.json 并总结配置",
+    turns:[
+      {think:"需要先读取文件内容。",text:"我先读取 config.json。",tool:{name:"read_file",args:'{ path: "config.json" }'},result:'{ "port": 8080, "env": "prod" }'},
+      {think:"已拿到文件内容，可以总结了。",text:"config.json 配置：端口 8080，环境 prod。任务完成。",tool:null,result:null},
+    ]},
+];
+const QUIZZES={
+  ch0:{q:"pi 这个项目的核心定位是什么？",
+    opts:["一个聊天机器人网站","一个用来构建 AI Agent 的分层框架（agent harness）","一个 LLM 模型本身","一个代码编辑器"],
+    answer:1,explain:"pi 是 agent harness —— 提供从 LLM 通信到 Agent 运行时再到成品 CLI 的分层框架。"},
+  ch1:{q:"为什么说 LLM 调用是“无状态”的？",
+    opts:["因为它不会出错","每次调用都必须把完整对话历史重新发过去，模型自己不记得上一轮","因为它不需要网络","因为它只能回答一个问题"],
+    answer:1,explain:"模型不保存会话。记忆体现为你每次传入的 messages 数组 —— 维护 Context 是调用方的责任。"},
+  ch2:{q:"流式输出中，text_delta 事件携带的是什么？",
+    opts:["完整的最终回复","正文的一个增量片段（一小段新文字）","错误信息","工具的执行结果"],
+    answer:1,explain:"delta 是增量。UI 把一连串 delta 拼接起来，就得到逐字生长的回复。"},
+  ch3:{q:"当 LLM 返回一个 toolCall 时，真正执行这个工具的是谁？",
+    opts:["LLM 模型自己","你的程序（agent 运行时调用 tool.execute）","操作系统","另一个 LLM"],
+    answer:1,explain:"LLM 不能执行代码，它只能“请求”。执行 execute 并把 toolResult 回填的是你的程序。"},
+  ch4:{q:"Agent Loop 的内层循环在什么条件下退出？",
+    opts:["运行满 10 轮","最近一条 assistant 消息里不再包含 toolCall","用户关闭程序","LLM 报错时才退出"],
+    answer:1,explain:"没有 toolCall 时 hasMoreToolCalls=false，内层循环退出 —— 代表 agent 认为任务完成了。"},
+  ch5:{q:"message_update 事件只在什么时候发出？",
+    opts:["每条消息都发","只有 assistant 消息流式输出时","只有工具执行时","只有出错时"],
+    answer:1,explain:"user / toolResult 一次成型，只有 assistant 在流式生成时才有 message_update 携带增量。"},
+  ch6:{q:"steering 消息和 follow-up 消息的区别是？",
+    opts:["没有区别","steering 在运行中途插入并尽快生效，follow-up 在 agent 本该停下后再追加一轮","follow-up 更快","steering 只能由 LLM 发出"],
+    answer:1,explain:"steering 用于“运行中插话”，下一 turn 前注入；follow-up 用于“它做完后再来一轮”。"},
+  ch7:{q:"pi-coding-agent 相对 pi-agent-core 多做了什么？",
+    opts:["重写了 LLM 通信","把通用引擎装配成成品：内置工具、system prompt、skills、上下文压缩、会话持久化","只是改了个名字","去掉了 agent loop"],
+    answer:1,explain:"agent-core 是“引擎”，coding-agent 是“整车”：在引擎上装好工具、提示词、压缩、会话。"},
+};
+
+/* ========== 拼装可复用 HTML 片段 ========== */
+function archHtml(){
+  let h='<div class="arch" id="archBox">';
+  ARCH.forEach((l,i)=>{
+    h+='<div class="arch-layer" data-i="'+i+'"><div class="al-name">'+l.name+'</div>'+
+       '<div class="al-role">'+l.role+'</div></div>';
+    if(i<ARCH.length-1)h+='<div class="arch-arrow">▲ 依赖</div>';
+  });
+  return h+'</div><div class="arch-detail" id="archDetail">👆 点击上面任意一层，查看它的职责。</div>';
+}
+function assemblyHtml(){
+  let h='<div class="arch" id="c7Box">';
+  ASSEMBLY.forEach((a,i)=>{h+='<div class="arch-layer" data-i="'+i+'"><div class="al-name">'+esc(a.k)+'</div></div>';});
+  return h+'</div><div class="arch-detail" id="c7Detail">👆 点击任意一项，查看它补齐了什么。</div>';
+}
+
+/* ========== 章节 / 步骤定义 ========== */
+function s(t,h,init){return {t:t,h:h,init:init};}
+
+const CHAPTERS=[
+{ id:"ch0", title:"总览：pi 是什么", steps:[
+  s("先建一张全局地图",
+    '<p>先说清楚 <strong>AI Agent（智能体）</strong>是什么：它是一个能<strong>自己调用工具、自己决定下一步做什么</strong>的程序 —— 比如能帮你读代码、改文件、跑命令的编程助手（你可能听过的 Claude Code、Cursor 就是这类）。</p>'+
+    '<p><strong>pi</strong> 则是一套<em>用来构建这种 AI Agent 的开源框架</em>（英文叫 agent harness，可理解为"脚手架"）。它不是某个大模型，也不是单个应用，而是一整套<strong>分层</strong>的代码库，让你能从零搭出一个自己的编程 Agent。它由 5 个包组成：</p>'+
+    '<table><tr><th>包</th><th>职责</th></tr>'+
+    '<tr><td><code>pi-ai</code></td><td>统一对接各家大模型（OpenAI、Anthropic 等"模型提供商"）的接口</td></tr>'+
+    '<tr><td><code>pi-agent-core</code></td><td>Agent 运行时（agent loop、工具、状态、事件）</td></tr>'+
+    '<tr><td><code>pi-coding-agent</code></td><td>能在终端里运行的编程 Agent（成品）</td></tr>'+
+    '<tr><td><code>pi-tui</code> / <code>pi-web-ui</code></td><td>终端界面 / 网页界面 组件</td></tr></table>'+
+    '<div class="note"><b>看到深色代码块别慌：</b>本教程会贴一些 pi 的<strong>真实源码</strong>给想深入的人看，但<strong>看不懂代码完全不影响学习和通关</strong> —— 每个代码块下方都有一行「📖 人话」翻译，正文也已把意思讲全。不懂编程的话，代码本身<strong>放心跳过</strong>就行。</div>'+
+    '<p class="hint">这些名词现在记不住没关系 —— 后面每一关会逐个讲透。这一关只有 3 步 + 1 道测验，先轻松热个身。</p>'),
+  s("分层架构（点一点）",
+    '<p>这些包<strong>层层叠起来</strong>，越往下越底层、越通用。点击每一层，看它负责什么：</p>'+
+    archHtml(),
+    initArch),
+  s("本教程的主线",
+    '<div class="bigidea">本教程会顺着这张图，<strong>从地基往上爬</strong>。</div>'+
+    '<ul><li><strong>关卡 2-4</strong>：最底层 —— 怎么和一个 LLM 说话（Context、流式、工具）</li>'+
+    '<li><strong>关卡 5-7</strong>：引擎层 —— 拆解 agent loop 与它的控制机制</li>'+
+    '<li><strong>关卡 8</strong>：成品层 —— 怎么把引擎装配成产品</li></ul>'+
+    '<div class="keytake"><b>玩法：</b>每关是若干个小步骤 + 1 道通关测验。答对测验即<strong>通关</strong>，'+
+    '解锁下一关、获得 100 XP。进度存在浏览器本地，可随时回看已通关的关卡。</div>'),
+]},
+
+{ id:"ch1", title:"一次 LLM 对话的本质", steps:[
+  s("LLM 是“无状态”的",
+    '<p>所有 AI Agent，剥到最里面，都在反复做同一件事：把上下文发给大模型，拿回它生成的下一条消息。我们从这一次调用讲起。</p>'+
+    '<p>初学者最大的误解：以为模型"记得"你说过的话。<strong>真相是模型什么都不记得。</strong>'+
+    '每次调用，调用方都必须把<em>到目前为止的完整对话历史</em>重新发过去。模型的行为就像一个<strong>固定的函数</strong> —— 给它同样的输入，就得到同样的输出，它自己<strong>不保存任何东西</strong>（这个"不保存"的特性，就叫"无状态"）：</p>'+
+    '<div class="bigidea">下一条消息 &nbsp;=&nbsp; LLM( 系统提示 + 完整历史 + 可用工具 )</div>'+
+    '<p>所以"记忆"不是模型的能力，而是<strong>调用方的责任</strong>。</p>'),
+  s("Context：LLM 能看到的一切",
+    '<p>在 pi 里，"要发过去的全部信息"被打包成一个对象 —— <span class="ic">Context</span>，只有三个部分：</p>'+
+    '<ul><li><span class="ic">systemPrompt</span> — 系统提示，给模型定角色、定规则</li>'+
+    '<li><span class="ic">messages</span> — 对话历史数组，每条有 role（<span class="badge b-blue">user</span> '+
+    '<span class="badge b-green">assistant</span> <span class="badge b-pink">toolResult</span>）</li>'+
+    '<li><span class="ic">tools</span> — 这次调用模型可用的工具（关卡 4 细讲）</li></ul>'+
+    codeBlock(SRC.context,"packages/ai · Context",
+      "把“系统提示 + 历史消息 + 可用工具”打包成一个 Context 对象，调 complete() 发给模型，拿回它的下一条回复。")),
+  s("“对话”是怎么持续的",
+    '<p>调用 <span class="ic">complete(model, context)</span> 把 Context 发给模型，它返回一条 '+
+    '<span class="ic">assistant</span> 消息。</p>'+
+    '<p>想让对话继续？把这条回复 <span class="ic">push</span> 进 <span class="ic">messages</span>，'+
+    '下次连同新问题<strong>整体再发一遍</strong>。</p>'+
+    '<div class="keytake"><b>这就是"对话"的全部机制：</b>没有魔法，只是一个不断变长的数组被反复重发。</div>'),
+  s("动手：拼装一个 Context",
+    '<p>你来当"调用方"。改系统提示、加用户消息，点"发送"。注意右侧 Context 在变大 —— 每次发送，<strong>整个数组</strong>都会重新发过去。</p>'+
+    '<div class="demo"><div class="demo-head">▶ 交互 Demo</div><div class="demo-body">'+
+    '<div class="demo-grid">'+
+    '<div><label class="fld">systemPrompt</label>'+
+    '<input type="text" id="c1-sys" value="你是一个简洁的助手。">'+
+    '<label class="fld">新的 user 消息</label>'+
+    '<input type="text" id="c1-input" value="你好，介绍一下你自己">'+
+    '<div class="btn-row"><button class="btn btn-primary" id="c1-send">发送给 LLM</button>'+
+    '<button class="btn" id="c1-reset">清空</button></div>'+
+    '<div class="phase-box" id="c1-phase">状态：等待发送。</div></div>'+
+    '<div class="pane"><div class="pane-title">当前 Context（会被整体发送）</div><div id="c1-ctx"></div></div>'+
+    '</div></div></div>',
+    initC1),
+]},
+
+{ id:"ch2", title:"流式输出与事件", steps:[
+  s("为什么模型是“逐字蹦”的",
+    '<p>关卡 2 用的是 <span class="ic">complete()</span>：发出去、等一会、拿到完整回复。但真实产品里你看到回复<strong>逐字蹦出来</strong> —— 这就是<em>流式（streaming）</em>。</p>'+
+    '<p>为什么要流式：</p>'+
+    '<ul><li><strong>体感快</strong> —— 用户立刻看到第一个字，而不是干等十几秒</li>'+
+    '<li><strong>可中断</strong> —— 方向不对时马上喊停，不白烧 token（<em>token</em> 是模型眼里的"字数单位"，输入和输出都按它计费）</li>'+
+    '<li><strong>能驱动 UI</strong> —— 思考、工具调用都能边生成边显示</li></ul>'),
+  s("流式 = 一连串“事件”",
+    '<p>pi 的 <span class="ic">stream()</span> 返回一个可 <span class="ic">for await</span> 的事件流。'+
+    '模型每吐一点东西就发一个<strong>事件</strong>，你的代码逐个处理、自己把消息拼起来：</p>'+
+    codeBlock(SRC.stream,"packages/ai · stream() 事件循环",
+      "stream() 把模型的输出拆成一个个“事件”陆续送来；你的代码用循环逐个接收，自己把碎片拼成完整回复。")+
+    '<table><tr><th>事件</th><th>含义</th></tr>'+
+    '<tr><td><code>thinking_delta</code></td><td>思考内容的一个增量片段</td></tr>'+
+    '<tr><td><code>text_delta</code></td><td>正文的一个增量片段</td></tr>'+
+    '<tr><td><code>toolcall_end</code></td><td>一个工具调用已解析完成</td></tr>'+
+    '<tr><td><code>done</code></td><td>流结束</td></tr></table>'+
+    '<div class="note"><b>“思考”是什么？</b>现在不少大模型在正式回答前，会先输出一段内部推理过程（像打草稿）。这段"草稿"和最终"正文"是<strong>两种不同的内容</strong> —— 所以事件里既有 <span class="ic">thinking_delta</span>（草稿的增量）也有 <span class="ic">text_delta</span>（正文的增量）。</div>'),
+  s("记住一个词：delta",
+    '<div class="bigidea">delta = 增量 = 一小段新内容</div>'+
+    '<p>UI 把一连串 delta 不断<strong>追加</strong>，就得到那个逐字生长的效果。</p>'+
+    '<p>一个完整消息 = <span class="badge b-gray">start 骨架</span> + '+
+    '<span class="badge b-blue">很多个 delta</span> + <span class="badge b-green">done</span>。</p>'+
+    '<div class="note"><b>下一步的 demo 会让你亲眼看到：</b>左边事件一个个到达，右边消息一点点被拼出来。</div>'),
+  s("动手：流式播放器",
+    '<p>点"播放"。左侧是模型发来的事件流，右侧是你的代码<strong>根据事件实时拼装</strong>出的消息。</p>'+
+    '<div class="demo"><div class="demo-head">▶ 交互 Demo</div><div class="demo-body">'+
+    '<div class="btn-row"><button class="btn btn-primary" id="c2-play">▶ 播放流式响应</button>'+
+    '<select id="c2-speed" style="width:auto"><option value="300">慢速（逐字看清）</option>'+
+    '<option value="120">正常</option><option value="45">快</option></select></div>'+
+    '<div class="demo-grid">'+
+    '<div class="pane"><div class="pane-title">① 收到的事件流</div>'+
+    '<div id="c2-events" style="max-height:240px;overflow-y:auto"></div></div>'+
+    '<div class="pane"><div class="pane-title">② 拼装出的 AssistantMessage</div><div id="c2-msg"></div></div>'+
+    '</div></div></div>',
+    initC2),
+]},
+
+{ id:"ch3", title:"工具调用：让 LLM 行动起来", steps:[
+  s("模型只会“说”，不会“做”",
+    '<p>到这里，模型还只能<strong>说</strong>，不能<strong>做</strong> —— 它无法读你的文件、跑命令、查数据库。</p>'+
+    '<p>工具调用（tool calling）就是打通"说"和"做"的桥梁。但它的工作方式，和直觉不太一样。</p>'),
+  s("核心：LLM 只“请求”，不执行",
+    '<p>这点必须钉死。流程是这样的：</p>'+
+    '<ol><li>你在 Context 的 <span class="ic">tools</span> 里告诉模型："你可以用这些工具"</li>'+
+    '<li>模型想用某工具时，回复里带一个 <span class="badge b-pink">toolCall</span>（工具名+参数）—— 这只是<strong>请求</strong></li>'+
+    '<li><strong>你的程序</strong>看到 toolCall，真正去执行（读文件、跑命令…）</li>'+
+    '<li>你把结果包成 <span class="badge b-pink">toolResult</span> 消息，push 回 messages</li>'+
+    '<li>再调一次 LLM —— 它现在能看到工具结果，于是继续往下做</li></ol>'+
+    '<div class="note"><b>谁干活？</b>模型负责"决定用什么工具、给什么参数"；执行由<strong>你的程序</strong>完成。模型永远碰不到你的文件系统。</div>'),
+  s("一个工具长什么样",
+    '<p>在 pi 里一个工具是 <span class="ic">AgentTool</span>，由四部分组成：名字、给模型看的描述、<strong>参数 schema</strong>、真正干活的 <span class="ic">execute</span> 函数。</p>'+
+    '<p class="hint">schema = 参数的"格式说明书"：规定每个参数叫什么名、是什么类型（文字？数字？）、必填还是可选。pi 用一个现成的库（TypeBox）来写它。</p>'+
+    codeBlock(SRC.tool,"packages/agent/src/types.ts · AgentTool",
+      "一个工具 = 名字 + 一段给模型看的描述 + 参数格式说明 + 一个真正干活的 execute 函数。")+
+    '<p class="hint">参数 schema 让 pi 在执行前自动校验模型给的参数；校验失败会作为错误回给模型让它重试。</p>'),
+  s("一轮调用的代码骨架",
+    '<p>把上面 5 步浓缩成代码，就是这三步：</p>'+
+    codeBlock(SRC.toolflow,"toolCall → execute → toolResult",
+      "三步：① 从模型回复里挑出 toolCall ② 你的程序执行它、拿到结果 ③ 把结果作为 toolResult 塞回对话，再问一次模型。")+
+    '<div class="keytake"><b>注意这个"再调一次"</b> —— 它意味着可能<strong>不止一轮</strong>。下一关就把它变成循环。</div>'),
+  s("动手：跑完整一轮工具调用",
+    '<p>已注册一个工具 <span class="ic">read_file</span>。按顺序点亮 4 步，看 messages 数组如何一步步增长。</p>'+
+    '<div class="demo"><div class="demo-head">▶ 交互 Demo</div><div class="demo-body">'+
+    '<div class="stepline" id="c3-steps">'+
+    '<span class="step-chip">1 用户提问</span><span class="step-chip">2 LLM 请求工具</span>'+
+    '<span class="step-chip">3 你执行工具</span><span class="step-chip">4 LLM 给出答复</span></div>'+
+    '<div class="btn-row"><button class="btn btn-primary" id="c3-next">▶ 执行下一步</button>'+
+    '<button class="btn" id="c3-reset">重置</button></div>'+
+    '<div class="phase-box" id="c3-phase">点击"执行下一步"开始。</div>'+
+    '<div class="pane"><div class="pane-title">messages 数组</div><div id="c3-msgs"></div></div>'+
+    '</div></div>',
+    initC3),
+]},
+
+{ id:"ch4", title:"Agent Loop：整个 pi 的心脏", steps:[
+  s("伏笔回收：为什么需要循环",
+    '<p>上一关结尾留了个伏笔：工具结果回填后"再调一次 LLM"—— 但那一次，它可能<strong>又要调工具</strong>。</p>'+
+    '<p>于是"调 LLM → 执行工具 → 回填"需要<em>反复进行</em>，直到模型不再请求工具。这个反复的过程，就是 <strong>Agent Loop</strong> —— 整个 pi 的心脏。</p>'),
+  s("一句话讲清 Agent Loop",
+    '<p>把它写成伪代码，骨架就这么几行：</p>'+
+    '<div class="codewrap"><div class="codehead"><span>伪代码</span>'+
+    '<span class="src">Agent Loop 的本质</span></div><pre class="code">'+
+    highlight("while (任务还没完成) {\n  assistant = 调用 LLM(当前 context)        // 让模型说话\n  if (assistant 里没有 toolCall) break       // 没有工具调用 = 干完了\n  for (每个 toolCall) 执行工具，把结果回填进 context\n}")+
+    '</pre></div>'+
+    '<p class="hint">（看不懂英文也没关系：<span class="ic">while</span> = "只要…就一直重复做"，<span class="ic">break</span> = "结束循环、跳出来"，<span class="ic">for</span> = "对每一个…都做一遍"。这是几乎所有编程语言表示"循环"和"判断"的通用写法。）</p>'+
+    '<p>“一个 turn” = 一次 LLM 调用 + 它触发的那批工具执行。Agent Loop 就是不断跑 turn，'+
+    '<strong>直到某个 turn 的 assistant 消息里不再有 toolCall</strong> —— 那代表模型认为活干完了。</p>'),
+  s("pi 的真实实现：runLoop",
+    '<p>下面是 pi 里 agent loop 的真实代码（已精简）。<strong>看着有点多，但别慌</strong> —— 骨架就是上一步那个 while，只盯<strong>带圈数字的 4 步</strong>看：</p>'+
+    codeBlock(SRC.runloop,"packages/agent/src/agent-loop.ts · runLoop()",
+      "整段就是一个 while 循环：调模型 → 看回复里有没有 toolCall → 有就执行、把结果回填 → 再调，直到没有 toolCall 为止。")+
+    '<p>把那 4 步翻成人话：</p>'+
+    '<ul><li><strong>①</strong> 调一次 LLM，产出一条 assistant 消息</li>'+
+    '<li><strong>②</strong> 从这条消息里，过滤出所有 toolCall</li>'+
+    '<li><strong>③</strong> 有 toolCall → 执行它们，把结果（toolResult）回填进 context</li>'+
+    '<li><strong>④</strong> 没有 toolCall → <span class="ic">hasMoreToolCalls</span> 变 false，内层循环退出</li></ul>'+
+    '<p class="hint">代码里 <span class="ic">streamAssistantResponse</span>、<span class="ic">executeToolCalls</span> 这些名字，只是把"调模型""执行工具"这些动作各自<strong>包成了一个函数</strong> —— 名字扫一眼即可，不用深究。</p>'),
+  s("为什么是两层循环",
+    '<p>注意 runLoop 里是<strong>两层</strong> while，各管一件事：</p>'+
+    '<p><strong>内层 while</strong> —— 管"工具调用循环"：只要上一轮还有 toolCall，就继续转下一个 turn。这是关卡主线，你已经懂了。</p>'+
+    '<p><strong>外层 while</strong> —— 管一个还没讲的东西，叫 <span class="ic">follow-up</span>（结束后追加的任务）：当内层退出、Agent 本该收工时，外层再瞄一眼"有没有追加任务"，有就再进内层跑一遍。</p>'+
+    '<div class="note"><b>follow-up 现在不用细究</b> —— 你只要知道"外层循环是为它准备的"就够了。它和 <span class="ic">steering</span>（运行中插话）都会在<strong>关卡 7</strong>专门讲。</div>'),
+  s("动手：Agent Loop 单步模拟器",
+    '<p>反复点“执行下一步”，看 loop 一圈圈转。默认任务有 <strong>2 轮工具调用</strong> —— 内层循环会转两圈，'+
+    '这才看得出“反复”二字；若选 1 轮的简单任务，流程就和上一关的单次工具调用一样、看不出循环。</p>'+
+    '<div class="demo"><div class="demo-head">▶ 交互 Demo · 本教程的核心</div><div class="demo-body">'+
+    '<label class="fld">选择任务</label>'+
+    '<select id="c4-task"><option value="0">2 轮工具调用 · 定位并修复 bug（看 loop 反复转）</option>'+
+    '<option value="1">1 轮工具调用 · 读 config.json 并总结（最简情形）</option></select>'+
+    '<div class="btn-row"><button class="btn btn-primary" id="c4-next">▶ 执行下一步</button>'+
+    '<button class="btn" id="c4-auto">⏩ 自动跑完</button>'+
+    '<button class="btn" id="c4-reset">重置</button></div>'+
+    '<div class="demo-grid">'+
+    '<div><div class="pane" style="min-height:84px"><div class="pane-title">runLoop 当前状态</div>'+
+    '<div class="phase-box" id="c4-phase" style="margin:0">点"执行下一步"启动 loop。</div>'+
+    '<div style="margin-top:7px;font-size:12px;color:var(--dim)">'+
+    'turn：<span class="badge b-green" id="c4-turn">0</span> &nbsp; '+
+    'hasMoreToolCalls：<span class="badge b-blue" id="c4-flag">—</span></div></div>'+
+    '<div class="hint" id="c4-srcref"></div></div>'+
+    '<div class="pane"><div class="pane-title">context.messages</div>'+
+    '<div id="c4-msgs" style="max-height:280px;overflow-y:auto"></div></div>'+
+    '</div></div></div>'+
+    '<div class="keytake"><b>理解了这个循环，你就理解了所有编程 Agent 的本质。</b></div>',
+    initC4),
+]},
+
+{ id:"ch5", title:"事件流：Agent 如何驱动 UI", steps:[
+  s("Agent 怎么把“正在发生的事”告诉界面",
+    '<p>前几关里，Agent loop 一直在<strong>内部</strong>转：调 LLM、执行工具、回填结果。可你在屏幕上看到的字、进度、工具提示，是怎么跟着动起来的？</p>'+
+    '<p>关键点：Agent <strong>不直接画界面</strong>。它每做一个动作，就朝外<strong>喊一声</strong> —— “我开始干活了”“模型说话了”“工具跑完了”。这一声声喊话，就叫<em>事件（event）</em>。</p>'+
+    '<div class="note"><b>打个比方：</b>Agent loop 像饭店的<strong>后厨</strong>，埋头做菜。它不亲自把菜端给客人，而是每完成一步就吆喝一嗓子；<strong>服务员</strong>（界面）听到吆喝就去更新。后厨不在乎有几个服务员、客人坐哪桌 —— 它只管喊。</div>'+
+    '<p>四个词先对上号：</p>'+
+    '<ul><li><strong>事件</strong> —— 一条“刚刚发生了什么”的通知</li>'+
+    '<li><strong>emit（发出）</strong> —— Agent“喊一声”这个动作</li>'+
+    '<li><strong>订阅</strong> —— 界面“竖起耳朵听”这些喊话</li>'+
+    '<li><strong>解耦</strong> —— 后厨和服务员互不依赖，各换各的、互不影响</li></ul>'),
+  s("为什么要这么绕？直接画界面不行吗",
+    '<p>你可能会想：Agent 干完活，直接把界面画出来不就完了，何必喊来喊去？</p>'+
+    '<p>因为 pi 的<strong>同一个引擎</strong>，要同时喂给<strong>两套完全不同的界面</strong>：终端界面（<span class="ic">pi-tui</span>）和网页界面（<span class="ic">pi-web-ui</span>）。</p>'+
+    '<p>如果 Agent 直接画界面，它就得知道“现在是终端还是网页”“光标在哪”“DOM 怎么改” —— 和界面彻底绑死。'+
+    '改成“喊事件”之后：<strong>Agent 只管喊，界面自己决定怎么画</strong>。换界面、加界面，Agent 的代码一行都不用改。</p>'+
+    '<div class="keytake"><b>这一关在解决的问题：</b>让 Agent 引擎和界面<strong>互不依赖</strong>。“事件”就是它俩之间唯一的约定 —— 这就是<em>解耦</em>的意义。</div>'),
+  s("Agent 能喊哪些话 —— AgentEvent 清单",
+    '<p>Agent 能喊的<strong>每一种话</strong>，都列在 <span class="ic">AgentEvent</span> 这个类型里。'+
+    '别被这一长串吓到 —— 它只是一份“喊话清单”，每一个 <span class="ic">{ type: "..." }</span> 就是一种喊法：</p>'+
+    codeBlock(SRC.event,"packages/agent/src/types.ts · AgentEvent",
+      "这是一份“通知类型清单”——每一个 { type: \"...\" } 就是 Agent 能朝外喊的一种话。")),
+  s("事件分四个层级 —— 这是干啥用的",
+    '<p>清单里的事件，按<strong>“说的事有多大”</strong>分成四层，像套娃一样层层嵌套。从最粗到最细：</p>'+
+    '<div class="bigidea" style="text-align:left;font-family:monospace;font-size:0.92em;line-height:2;color:var(--txt)">'+
+    'agent_start <span style="color:var(--dim)">────── 整场任务开始</span><br>'+
+    '&nbsp;&nbsp;turn_start <span style="color:var(--dim)">──── 第 1 轮开始</span><br>'+
+    '&nbsp;&nbsp;&nbsp;&nbsp;message_start / _update / _end<br>'+
+    '&nbsp;&nbsp;&nbsp;&nbsp;tool_execution_start / _end<br>'+
+    '&nbsp;&nbsp;turn_end<br>'+
+    '&nbsp;&nbsp;turn_start <span style="color:var(--dim)">──── 第 2 轮开始 ……</span><br>'+
+    '&nbsp;&nbsp;turn_end<br>'+
+    'agent_end <span style="color:var(--dim)">────── 整场任务结束</span></div>'+
+    '<p><strong>为什么要分层？</strong>因为界面得先知道“这件事有多大”，才知道该怎么反应。每一层对应界面的一种动作：</p>'+
+    '<table><tr><th>层级</th><th>一个事件代表</th><th>界面收到后做什么</th></tr>'+
+    '<tr><td><b>Agent</b></td><td>整场任务的开始 / 结束</td><td>显示、收起全局“运行中”状态</td></tr>'+
+    '<tr><td><b>Turn</b></td><td>一轮（= 一次 LLM 调用）的开始 / 结束</td><td>画一条分隔线，把每一轮分开</td></tr>'+
+    '<tr><td><b>Message</b></td><td>一条消息的出现、流式增量、完成</td><td>新建气泡、往里逐字追加文字</td></tr>'+
+    '<tr><td><b>Tool</b></td><td>一个工具的执行开始 / 结束</td><td>显示“工具执行中…”、再换成结果</td></tr></table>'+
+    '<p>同一段时间，<strong>粗看</strong>是“任务在跑”，<strong>细看</strong>是“第 2 轮里那条消息又多了 3 个字”。'+
+    '界面订阅哪一层，就在哪个粒度上做反应 —— 这就是分层的用处。</p>'),
+  s("动手：看事件怎么驱动界面",
+    '<p>点“运行”。<strong>左边</strong>是 Agent 按时间喊出的一串事件，<strong>右边</strong>是界面听到后画出来的样子。盯住这几处对应关系：</p>'+
+    '<ul><li>左边 <span class="ic">turn_start</span> 一来 → 右边开始新的一轮</li>'+
+    '<li>左边 <span class="ic">message_update</span> 在刷 → 右边文字一点点变长</li>'+
+    '<li>左边 <span class="ic">tool_execution_*</span> → 右边出现“工具执行中…”再变成结果</li></ul>'+
+    '<div class="demo"><div class="demo-head">▶ 交互 Demo</div><div class="demo-body">'+
+    '<div class="btn-row"><button class="btn btn-primary" id="c5-run">▶ 运行一个带工具的任务</button></div>'+
+    '<div class="demo-grid">'+
+    '<div class="pane"><div class="pane-title">① Agent 喊出的事件</div>'+
+    '<div id="c5-events" style="max-height:300px;overflow-y:auto"></div></div>'+
+    '<div class="pane"><div class="pane-title">② 界面听到后画成这样</div>'+
+    '<div id="c5-ui" style="max-height:300px;overflow-y:auto"></div></div>'+
+    '</div></div></div>',
+    initC5),
+]},
+
+{ id:"ch6", title:"进阶控制：让 Agent 更可控", steps:[
+  s("运行中插话：steering",
+    '<p>前面的 agent loop 一旦跑起来，就<strong>一条道跑到黑</strong> —— 中途你插不上手。但真实产品里你常要干预：纠偏、加任务、拦下危险操作、防止对话太长。这一关讲 pi 给你的几个"控制旋钮"。</p>'+
+    '<p>第一个，<strong>steering（运行中插话）</strong>。打个比方：开会开到一半，你举手说"等等，方向错了，改成 X"。你没有粗暴打断当前发言，但<strong>下一轮</strong>讨论就照你说的来。</p>'+
+    '<p>对 Agent 也一样：它正在跑工具时，你可以塞一条 steering 消息进去。它不会中断当前这一批工具，但在<strong>下一个 turn 开始前</strong>，这条消息会被注入对话 —— 模型下一轮就看到了。</p>'+
+    '<div class="note"><b>对照关卡 5 的 runLoop：</b>它的内层循环每转一圈、开下一个 turn 之前，都会先<strong>检查一次</strong>有没有 steering 消息要注入 —— 现在你明白那个检查是干嘛用的了。</div>'),
+  s("做完再追加：follow-up",
+    '<p>第二个旋钮，<strong>follow-up（结束后追加）</strong>。还是开会的比方：会都散了，你又补一句"对了，顺便把会议纪要也发我"。</p>'+
+    '<p>Agent 本来已经没有工具要调、准备收工了；这时如果 follow-up 队列里有消息，它会<strong>再多跑一轮</strong>，把这件事也做掉。</p>'+
+    '<table><tr><th></th><th>steering（插话）</th><th>follow-up（追加）</th></tr>'+
+    '<tr><td>时机</td><td>Agent 还在跑 —— 中途插入</td><td>Agent 本该停了 —— 收工前再追加</td></tr>'+
+    '<tr><td>典型场景</td><td>"停，方向错了，改成 X"</td><td>"做完后顺便也总结一下"</td></tr>'+
+    '<tr><td>对应 loop</td><td>内层 while 每圈顶部注入</td><td>内层退出后，外层 while 检查队列</td></tr></table>'+
+    codeBlock(SRC.steer,"packages/agent · steer / followUp",
+      "steer() 把消息放进“插话”队列、followUp() 放进“追加”队列；loop 会在合适的时机自动取出它们。")),
+  s("给工具加“安检”和“质检”：钩子",
+    '<p>第三个旋钮：在工具执行的<strong>前后</strong>各设一道关卡，pi 把它们叫<em>钩子（hook）</em>。</p>'+
+    '<p><strong>beforeToolCall —— 执行前的"安检"。</strong>工具真正跑之前先过它一遍。发现危险操作（比如模型想跑 <span class="ic">bash</span> 去删文件），可以直接<strong>拦下</strong>，不让它执行。</p>'+
+    '<p><strong>afterToolCall —— 执行后的"质检"。</strong>工具跑完、结果还没回填进对话之前，过它一遍。可以<strong>改写</strong>结果，或者喊一句"行了，别再调工具了"让 loop 提前收工。</p>'+
+    codeBlock(SRC.hooks,"packages/agent · beforeToolCall / afterToolCall",
+      "beforeToolCall 返回 block:true 就拦下这次工具调用；afterToolCall 可以替换工具结果、或叫停 loop。")+
+    '<p class="hint"><b>顺带一提 · 多个工具的执行顺序：</b>模型有时一次请求<strong>多个</strong>工具。pi 默认让它们<strong>同时跑</strong>（parallel，更快）；也可设成<strong>排队一个个跑</strong>（sequential）。像"改文件"这种有先后依赖的工具，可单独要求必须排队。</p>'),
+  s("对话太长会“撑爆” —— 上下文压缩",
+    '<p>第四个旋钮，解决一个迟早会遇到的问题。</p>'+
+    '<p>LLM 一次能"看"的内容是<strong>有上限</strong>的，这个上限叫<em>上下文窗口（context window）</em>。打个比方：模型面前只有一张桌子，摊纸的面积固定 —— 对话越长，messages 里的纸越多，迟早摊不下。</p>'+
+    '<p>而关卡 2 讲过：每一轮都要把<strong>完整历史</strong>重新发过去。所以长对话<strong>一定</strong>会逼近这个上限。</p>'+
+    '<p><span class="ic">transformContext</span> 就是来救场的：它在每次调 LLM <strong>之前</strong>运行，把旧内容<strong>裁剪或压缩</strong> —— 比如把十条旧消息总结成一条，给新内容腾地方。这件事也叫 <em>compaction（上下文压缩）</em>，关卡 8 还会再提到。</p>'),
+  s("藏起“只给界面看”的消息：convertToLlm",
+    '<p>最后一个旋钮，关于消息的"分类"。</p>'+
+    '<p>回忆关卡 2：LLM 只认识三种消息 —— <span class="badge b-blue">user</span> <span class="badge b-green">assistant</span> <span class="badge b-pink">toolResult</span>。</p>'+
+    '<p>但你的 App 常想在对话记录里夹一些<strong>"内部便签"</strong>：给界面看的通知、状态、分隔线…… 这些 LLM 不该看到，看到反而会被干扰。</p>'+
+    '<p>pi 的办法：用一种更宽松的"消息格式" <span class="ic">AgentMessage</span> 把便签也一起装进去；再用 <span class="ic">convertToLlm</span> —— 在每次递给 LLM <strong>之前</strong>，把便签全抽走，只留下 LLM 看得懂的那三种消息。</p>'+
+    codeBlock(SRC.convert,"packages/agent · convertToLlm / transformContext",
+      "这段代码里有两个函数：convertToLlm 过滤“便签消息”，transformContext 做上一步讲的压缩。")+
+    '<p class="hint"><b>两者的先后：</b>每次调 LLM 之前，pi 会<strong>先</strong>跑 <span class="ic">transformContext</span>（压缩超长上下文），<strong>再</strong>跑 <span class="ic">convertToLlm</span>（抽走便签消息）。它俩是这一关后两个旋钮，一前一后、各管一摊。</p>'),
+  s("动手：运行中 steering 插话",
+    '<p>让 Agent 跑一个多轮任务。在它运行时点"插入 steering 消息"，观察这条消息<strong>不会立刻打断</strong>当前 turn，而是在<strong>下一个 turn 开始前</strong>才被注入 context。</p>'+
+    '<div class="demo"><div class="demo-head">▶ 交互 Demo</div><div class="demo-body">'+
+    '<div class="btn-row"><button class="btn btn-primary" id="c6-run">▶ 启动 agent</button>'+
+    '<button class="btn btn-warn" id="c6-steer" disabled>⚡ 插入 steering 消息</button>'+
+    '<button class="btn" id="c6-reset">重置</button></div>'+
+    '<div class="phase-box" id="c6-phase">点"启动 agent"开始。</div>'+
+    '<div class="pane"><div class="pane-title">context.messages</div>'+
+    '<div id="c6-msgs" style="max-height:260px;overflow-y:auto"></div></div>'+
+    '</div></div>',
+    initC6),
+]},
+
+{ id:"ch7", title:"从框架到产品：pi-coding-agent", steps:[
+  s("引擎 vs 整车",
+    '<p>走到这里，你已经理解了 pi 的<strong>引擎</strong>：Context、流式、工具调用、agent loop、事件流、进阶控制 —— 这就是一个 AI Agent 转起来所需的全部核心机制。</p>'+
+    '<p>但引擎不能直接上路 —— <span class="ic">pi-agent-core</span> 只给了通用循环和接口，<strong>不带任何具体工具</strong>，也没有提示词。</p>'+
+    '<p><span class="ic">pi-coding-agent</span> 就是"整车装配厂"：在引擎之上补齐一切，做出你在终端运行的那个 <span class="ic">pi</span> 命令。</p>'),
+  s("装配清单（点一点）",
+    '<p>点击每一项，看它给引擎补齐了什么：</p>'+
+    assemblyHtml(),
+    initC7),
+  s("全链路：一次输入怎么穿过所有层",
+    '<p>把这一关学的"装配件"接上前面的引擎，就能完整看懂：你在终端敲一句话，它是怎么一层层传下去、又一层层传回来的。</p>'+
+    '<div class="bigidea" style="text-align:left;font-size:0.86em;line-height:2.15">'+
+    '<span class="badge b-gray">你在终端输入一句话</span> ↓<br>'+
+    '<span class="badge b-blue">pi-tui</span>（终端界面）捕获输入，交给 Agent ↓<br>'+
+    '<span class="badge b-green">pi-coding-agent</span> 带着装好的提示词 + 工具，启动 ↓<br>'+
+    '<span class="badge b-pink">pi-agent-core</span> 跑 agent loop：调 LLM → 执行工具 → 回填 → 循环 ↓<br>'+
+    '<span class="badge b-blue">pi-ai</span> 把请求发给某家大模型，流式返回 ↑<br>'+
+    '<span class="badge b-pink">agent-core</span> 一路把"事件"喊出来 ↑<br>'+
+    '<span class="badge b-blue">pi-tui</span> 听到事件，实时把对话画到你的终端 ✓</div>'+
+    '<div class="keytake"><b>全教程总结：</b>一个 AI Agent 的本质，就是一个 <strong>agent loop</strong> —— '+
+    '反复「把 Context 发给无状态的 LLM → LLM 用文字或 toolCall 回应 → 执行工具并回填 → 再发」，直到不再有工具调用。'+
+    'pi 把这个循环做成通用引擎，下面垫统一 LLM 接口，上面装配成产品并用事件流驱动 UI。</div>'+
+    '<div class="note"><b>下一步：</b>打开仓库 <span class="ic">packages/agent/src/agent-loop.ts</span> 对照本教程精读 —— 你会发现已经基本看得懂了。</div>'),
+]},
+];
+
+/* ========== 进度 / XP ========== */
+const PROG_KEY="pi-tutorial-v2-progress";
+const THEME_KEY="pi-tutorial-v2-theme";
+let progress=load(PROG_KEY,{});
+function load(k,d){try{return JSON.parse(localStorage.getItem(k))||d;}catch(e){return d;}}
+function save(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+
+function clearedCount(){return CHAPTERS.filter(c=>progress[c.id]).length;}
+function unlocked(ci){return ci===0||!!progress[CHAPTERS[ci-1].id];}
+
+/* ========== 主题 ========== */
+function applyTheme(t){
+  document.body.classList.toggle("dark",t==="dark");
+  document.getElementById("themeBtn").textContent=t==="dark"?"☾":"☀";
+}
+let theme=load(THEME_KEY,"light");
+applyTheme(theme);
+document.getElementById("themeBtn").onclick=()=>{
+  theme=theme==="dark"?"light":"dark";
+  save(THEME_KEY,theme);applyTheme(theme);
+};
+
+/* ========== toast ========== */
+let toastTimer;
+function toast(msg){
+  const el=document.getElementById("toast");
+  el.textContent=msg;el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.classList.remove("show"),2200);
+}
+
+/* ========== 侧边栏 ========== */
+function renderSidebar(){
+  const cleared=clearedCount();
+  const xp=cleared*100;
+  document.getElementById("xpNum").textContent=xp;
+  document.getElementById("xpFill").style.width=(xp/800*100)+"%";
+  document.getElementById("xpStars").textContent=
+    "★".repeat(cleared)+"☆".repeat(8-cleared);
+  const list=document.getElementById("levelList");
+  list.innerHTML=CHAPTERS.map((c,i)=>{
+    const done=!!progress[c.id], lock=!unlocked(i), active=i===curCh;
+    const node=lock?"🔒":(done?"✓":(i+1));
+    return '<div class="lv-item'+(active?" active":"")+(done?" done":"")+(lock?" locked":"")+
+      '" data-i="'+i+'"><div class="lv-node">'+node+'</div>'+
+      '<div class="lv-txt"><b>关卡 '+(i+1)+'</b><span>'+esc(c.title)+'</span></div></div>';
+  }).join("");
+  list.querySelectorAll(".lv-item").forEach(el=>{
+    el.onclick=()=>{
+      const i=+el.dataset.i;
+      if(!unlocked(i)){toast("🔒 先通关「关卡 "+i+"」才能解锁");return;}
+      gotoLevel(i,0);
+    };
+  });
+}
+
+/* ========== 渲染步骤 ========== */
+let curCh=0, curStep=0;
+
+function gotoLevel(ci,st){
+  if(!unlocked(ci)){toast("🔒 该关卡尚未解锁");return;}
+  curCh=ci;curStep=st;
+  renderStep();renderSidebar();
+  window.scrollTo&&window.scrollTo(0,0);
+}
+
+function totalSteps(ch){return ch.steps.length+1;} // +1 = 测验
+
+function renderStep(){
+  const ch=CHAPTERS[curCh];
+  const total=totalSteps(ch);
+  const isQuiz=curStep===total-1;
+  const stage=document.getElementById("stage");
+
+  // 顶部进度
+  let dots="";
+  for(let i=0;i<total;i++){
+    dots+='<div class="dot'+(i===curStep?" cur":(i<curStep?" past":""))+'" data-s="'+i+'"></div>';
+  }
+  let html='<div class="topbar"><div class="crumb">关卡 '+(curCh+1)+' · <b>'+esc(ch.title)+
+    '</b></div><div class="dots">'+dots+'</div></div>';
+
+  // 卡片
+  html+='<div class="card" id="card">';
+  if(isQuiz){
+    const q=QUIZZES[ch.id];
+    html+='<div class="step-kicker">通关测验 · 第 '+total+'/'+total+' 步</div>';
+    html+='<h2>🎯 关卡 '+(curCh+1)+' 通关测验</h2>';
+    html+='<p style="color:var(--dim);font-size:13px">答对即可通关，解锁下一关并获得 100 XP。</p>';
+    html+='<div class="quiz-q">'+q.q+'</div>';
+    html+=q.opts.map((o,i)=>'<label class="quiz-opt" data-i="'+i+'">'+o+'</label>').join("");
+    html+='<div class="quiz-fb"></div>';
+    html+='<div class="btn-row"><button class="btn btn-primary" id="qzSubmit" disabled>提交答案</button></div>';
+    html+='<div class="celebrate" id="celebrate"><div class="big">🎉</div>'+
+      '<div class="ttl">关卡 '+(curCh+1)+' 通关！</div><div class="xp">+100 XP &nbsp;·&nbsp; '+
+      (curCh<7?'下一关已解锁':'你已完成全部 8 关')+'</div></div>';
+  }else{
+    const step=ch.steps[curStep];
+    html+='<div class="step-kicker">第 '+(curStep+1)+' / '+total+' 步</div>';
+    html+='<h2>'+esc(step.t)+'</h2>';
+    html+=step.h;
+  }
+  html+='</div>';
+
+  // 底部导航
+  html+='<div class="footer">';
+  html+= curStep>0
+    ? '<button class="btn" id="navPrev">← 上一步</button>'
+    : (curCh>0?'<button class="btn" id="navPrevCh">← 回到关卡 '+curCh+'</button>':'<span></span>');
+  if(isQuiz){
+    const done=!!progress[ch.id];
+    if(done){
+      html+= curCh<7
+        ? '<button class="btn btn-primary" id="navNextCh">进入关卡 '+(curCh+2)+' →</button>'
+        : '<button class="btn btn-primary" id="navHome">🏆 回到关卡 1</button>';
+    }else{
+      html+='<button class="btn" disabled>答对测验后解锁 →</button>';
+    }
+  }else{
+    html+='<button class="btn btn-primary" id="navNext">下一步 →</button>';
+  }
+  html+='</div>';
+
+  stage.innerHTML=html;
+
+  // 绑定
+  const toTop=()=>{window.scrollTo&&window.scrollTo(0,0);};
+  stage.querySelectorAll(".dot").forEach(d=>{
+    d.onclick=()=>{curStep=+d.dataset.s;renderStep();toTop();};
+  });
+  const bind=(id,fn)=>{const e=document.getElementById(id);if(e)e.onclick=fn;};
+  bind("navPrev",()=>{curStep--;renderStep();toTop();});
+  bind("navNext",()=>{curStep++;renderStep();toTop();});
+  bind("navPrevCh",()=>gotoLevel(curCh-1,totalSteps(CHAPTERS[curCh-1])-1));
+  bind("navNextCh",()=>gotoLevel(curCh+1,0));
+  bind("navHome",()=>gotoLevel(0,0));
+
+  if(isQuiz)bindQuiz(ch);
+  else if(ch.steps[curStep].init)ch.steps[curStep].init();
+}
+
+/* ========== 测验 ========== */
+function bindQuiz(ch){
+  const q=QUIZZES[ch.id];
+  const opts=document.querySelectorAll(".quiz-opt");
+  const fb=document.querySelector(".quiz-fb");
+  const submit=document.getElementById("qzSubmit");
+  const cele=document.getElementById("celebrate");
+  let picked=-1, locked=false;
+
+  if(progress[ch.id]){
+    // 已通关：直接展示答案与庆祝
+    opts[q.answer].classList.add("correct");
+    fb.className="quiz-fb ok";fb.textContent="✓ "+q.explain;
+    submit.style.display="none";
+    cele.classList.add("show");
+    locked=true;
+  }
+  opts.forEach(o=>{
+    o.onclick=()=>{
+      if(locked)return;
+      opts.forEach(x=>x.classList.remove("sel"));
+      o.classList.add("sel");picked=+o.dataset.i;submit.disabled=false;
+    };
+  });
+  submit.onclick=()=>{
+    if(picked<0||locked)return;
+    if(picked===q.answer){
+      locked=true;
+      opts[q.answer].classList.add("correct");
+      fb.className="quiz-fb ok";fb.textContent="✓ 正确！"+q.explain;
+      submit.style.display="none";
+      const wasDone=!!progress[ch.id];
+      progress[ch.id]=true;save(PROG_KEY,progress);
+      renderSidebar();
+      cele.classList.add("show");
+      if(!wasDone)toast("🎉 关卡 "+(curCh+1)+" 通关！+100 XP");
+      // 刷新底部导航（解锁"下一关"按钮）
+      renderStep();
+    }else{
+      opts[picked].classList.add("wrong");
+      fb.className="quiz-fb no";fb.textContent="✗ 再想想。"+q.explain;
+      setTimeout(()=>{
+        opts.forEach(x=>x.classList.remove("wrong","sel"));
+        fb.className="quiz-fb";picked=-1;submit.disabled=true;
+      },1800);
+    }
+  };
+}
+
+/* ========== 键盘导航 ========== */
+document.addEventListener("keydown",e=>{
+  if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA")return;
+  if(e.key==="ArrowRight"){const n=document.getElementById("navNext")||document.getElementById("navNextCh");if(n)n.click();}
+  if(e.key==="ArrowLeft"){const p=document.getElementById("navPrev");if(p)p.click();}
+});
+
+/* ========== 通用：打字机 ========== */
+function typeStream(text,target,speed,onChar,onDone){
+  let i=0;
+  target.classList.add("cursor-blink");
+  const timer=setInterval(()=>{
+    if(i>=text.length){clearInterval(timer);target.classList.remove("cursor-blink");onDone&&onDone();return;}
+    const ch=text[i++];
+    onChar?onChar(ch):(target.textContent+=ch);
+  },speed||32);
+  return timer;
+}
+
+/* ================= 各 Demo 初始化 ================= */
+function initArch(){
+  const box=document.getElementById("archBox");
+  const detail=document.getElementById("archDetail");
+  if(!box)return;
+  box.querySelectorAll(".arch-layer").forEach(el=>{
+    el.onclick=()=>{
+      box.querySelectorAll(".arch-layer").forEach(x=>x.classList.remove("sel"));
+      el.classList.add("sel");
+      detail.innerHTML=ARCH[+el.dataset.i].detail;
+    };
+  });
+}
+function initC7(){
+  const box=document.getElementById("c7Box");
+  const detail=document.getElementById("c7Detail");
+  if(!box)return;
+  box.querySelectorAll(".arch-layer").forEach(el=>{
+    el.onclick=()=>{
+      box.querySelectorAll(".arch-layer").forEach(x=>x.classList.remove("sel"));
+      el.classList.add("sel");
+      detail.innerHTML=ASSEMBLY[+el.dataset.i].d;
+    };
+  });
+}
+function initC1(){
+  const sys=document.getElementById("c1-sys");
+  const input=document.getElementById("c1-input");
+  const ctxBox=document.getElementById("c1-ctx");
+  const phase=document.getElementById("c1-phase");
+  if(!sys)return;
+  let messages=[], busy=false, replyIdx=0;
+  const replies=[
+    "你好！我是运行在 pi 框架上的助手，有问题尽管问。",
+    "我没有独立记忆 —— 能答得上文相关，是因为你把历史一起发了过来。",
+    "每多一轮，messages 数组就更长，下次要发送的内容也更多。",
+    "这就是为什么长对话需要“上下文压缩”——关卡 7 会讲到。",
+  ];
+  function renderCtx(){
+    let h='<div class="msg msg-system"><span class="role">systemPrompt</span><span class="mc">'+esc(sys.value||"(空)")+'</span></div>';
+    if(messages.length===0)h+='<div style="color:var(--dim);font-size:12px;padding:5px">messages: [] —— 还没有任何对话</div>';
+    messages.forEach(m=>{
+      h+='<div class="msg msg-'+m.role+'"><span class="role">'+m.role+'</span><span class="mc">'+esc(m.content)+'</span></div>';
+    });
+    ctxBox.innerHTML=h;
+  }
+  document.getElementById("c1-send").onclick=()=>{
+    if(busy)return;
+    const text=input.value.trim();
+    if(!text){phase.innerHTML="状态：<b>请先输入一条 user 消息</b>";return;}
+    busy=true;
+    messages.push({role:"user",content:text});
+    input.value="";renderCtx();
+    phase.innerHTML="状态：<b>整个 Context 已发送给模型…</b>（是整体重发，不是只发新消息）";
+    const reply=replies[replyIdx++%replies.length];
+    const aMsg={role:"assistant",content:""};
+    messages.push(aMsg);renderCtx();
+    const last=ctxBox.querySelector(".msg-assistant:last-child");
+    typeStream(reply,last,26,
+      ch=>{aMsg.content+=ch;last.querySelector(".mc").textContent=aMsg.content;},
+      ()=>{busy=false;phase.innerHTML="状态：<b>收到 assistant 回复</b>，已 push 进 messages。可继续发送。";});
+  };
+  document.getElementById("c1-reset").onclick=()=>{
+    messages=[];replyIdx=0;busy=false;renderCtx();phase.innerHTML="状态：对话已清空。";
+  };
+  sys.oninput=renderCtx;
+  renderCtx();
+}
+function initC2(){
+  const evBox=document.getElementById("c2-events");
+  const msgBox=document.getElementById("c2-msg");
+  const playBtn=document.getElementById("c2-play");
+  if(!evBox)return;
+  const thinking="用户在打招呼，简单友好地回应即可。";
+  const textBody="你好！我是 pi 框架上的助手。这段文字是逐字流式生成的。";
+  let timers=[];
+  playBtn.onclick=()=>{
+    timers.forEach(clearInterval);timers=[];
+    const speed=+document.getElementById("c2-speed").value;
+    evBox.innerHTML="";playBtn.disabled=true;
+    // 骨架只建一次，之后仅更新文字（textContent），避免整块重渲染导致闪烁
+    msgBox.innerHTML=
+      '<div class="msg msg-assistant">'+
+      '<span class="role" id="c2-role">assistant <span class="badge b-gray">streaming…</span></span>'+
+      '<div class="think" id="c2-think" style="display:none"></div>'+
+      '<div id="c2-text"></div></div>';
+    const roleEl=document.getElementById("c2-role");
+    const thinkEl=document.getElementById("c2-think");
+    const textEl=document.getElementById("c2-text");
+    let thinkStr="",textStr="";
+    function addEvt(cls,txt){
+      const d=document.createElement("div");
+      d.className="evt "+cls;
+      d.innerHTML='<span class="evt-dot"></span>'+esc(txt);
+      evBox.appendChild(d);evBox.scrollTop=evBox.scrollHeight;
+    }
+    addEvt("evt-msg","event: start  → 创建空消息骨架");
+    setTimeout(()=>{
+      addEvt("evt-agent","event: thinking_start");
+      thinkEl.style.display="";
+      let i=0;
+      const t1=setInterval(()=>{
+        if(i>=thinking.length){
+          clearInterval(t1);
+          addEvt("evt-agent","event: thinking_end");
+          addEvt("evt-msg","event: text_start");
+          let j=0;
+          const t2=setInterval(()=>{
+            if(j>=textBody.length){
+              clearInterval(t2);
+              addEvt("evt-msg","event: text_end");
+              addEvt("evt-turn","event: done  (reason: stop)");
+              roleEl.textContent="assistant";
+              playBtn.disabled=false;return;
+            }
+            const ch=textBody[j++];
+            textStr+=ch;textEl.textContent=textStr;
+            addEvt("evt-msg",'event: text_delta  delta="'+ch+'"');
+          },speed);
+          timers.push(t2);
+          return;
+        }
+        const ch=thinking[i++];
+        thinkStr+=ch;thinkEl.textContent="💭 "+thinkStr;
+        addEvt("evt-agent",'event: thinking_delta  delta="'+ch+'"');
+      },speed);
+      timers.push(t1);
+    },300);
+  };
+}
+function initC3(){
+  const steps=document.querySelectorAll("#c3-steps .step-chip");
+  const msgsBox=document.getElementById("c3-msgs");
+  const phase=document.getElementById("c3-phase");
+  const nextBtn=document.getElementById("c3-next");
+  if(!msgsBox)return;
+  let step=0, messages=[];
+  const phases=[
+    "第 ① 步：用户提问。一条 <b>user</b> 消息进入 messages。",
+    "第 ② 步：LLM 看到 read_file 可用，返回 <b>assistant</b> 消息，带一个 <b>toolCall</b>。注意：文件还没被读，这只是请求。",
+    "第 ③ 步：你的程序执行 read_file('config.json')，拿到内容，包成 <b>toolResult</b> 回填。",
+    "第 ④ 步：带着工具结果再调一次 LLM。这次它能看到文件内容，给出最终 <b>assistant</b> 答复。",
+  ];
+  function render(){
+    if(messages.length===0){msgsBox.innerHTML='<div style="color:var(--dim);font-size:12px">[] 空</div>';return;}
+    msgsBox.innerHTML=messages.map(m=>{
+      if(m.role==="assistant"&&m.toolCall)
+        return '<div class="msg msg-assistant"><span class="role">assistant</span>'+
+          (m.content?esc(m.content)+'<br>':'')+
+          '<span class="tcall">→ toolCall: read_file({ path: "config.json" })</span></div>';
+      if(m.role==="toolResult")
+        return '<div class="msg msg-tool"><span class="role">toolResult · read_file</span>'+
+          '<span class="mono" style="font-size:12px">'+esc(m.content)+'</span></div>';
+      return '<div class="msg msg-'+m.role+'"><span class="role">'+m.role+'</span>'+esc(m.content)+'</div>';
+    }).join("");
+  }
+  nextBtn.onclick=()=>{
+    if(step>=4){phase.innerHTML="✓ 一轮工具调用完成。messages 里现在有 4 条消息。点“重置”再来。";return;}
+    steps[step].classList.add("on");
+    phase.innerHTML=phases[step];
+    if(step===0)messages.push({role:"user",content:"读一下 config.json，告诉我端口号"});
+    if(step===1)messages.push({role:"assistant",content:"我需要先读取这个文件。",toolCall:true});
+    if(step===2)messages.push({role:"toolResult",content:'{ "port": 8080, "host": "localhost" }'});
+    if(step===3)messages.push({role:"assistant",content:"config.json 里配置的端口号是 8080。"});
+    render();step++;
+    if(step>=4)nextBtn.textContent="✓ 已完成";
+  };
+  document.getElementById("c3-reset").onclick=()=>{
+    step=0;messages=[];render();
+    steps.forEach(s=>s.classList.remove("on"));
+    nextBtn.textContent="▶ 执行下一步";
+    phase.innerHTML="点击“执行下一步”开始。";
+  };
+  render();
+}
+function initC4(){
+  const phase=document.getElementById("c4-phase");
+  const msgsBox=document.getElementById("c4-msgs");
+  const turnEl=document.getElementById("c4-turn");
+  const flagEl=document.getElementById("c4-flag");
+  const srcRef=document.getElementById("c4-srcref");
+  const nextBtn=document.getElementById("c4-next");
+  const taskSel=document.getElementById("c4-task");
+  if(!msgsBox)return;
+  let task,messages,state,turn,turnIdx,autoTimer,busy;
+  function reset(){
+    clearInterval(autoTimer);autoTimer=null;
+    task=C4_TASKS[+taskSel.value];
+    messages=[];state="init";turn=0;turnIdx=0;busy=false;
+    nextBtn.disabled=false;nextBtn.textContent="▶ 执行下一步";
+    turnEl.textContent="0";flagEl.textContent="—";
+    phase.innerHTML="点“执行下一步”启动 loop。";srcRef.textContent="";
+    render();
+  }
+  function render(){
+    if(messages.length===0){msgsBox.innerHTML='<div style="color:var(--dim);font-size:12px">[] 空</div>';return;}
+    msgsBox.innerHTML=messages.map(m=>{
+      if(m.role==="assistant")
+        return '<div class="msg msg-assistant"><span class="role">assistant · turn '+m.turn+'</span>'+
+          (m.think?'<div class="think">💭 '+esc(m.think)+'</div>':'')+
+          '<div>'+esc(m.text)+'</div>'+
+          (m.tool?'<span class="tcall">→ toolCall: '+esc(m.tool.name)+'('+esc(m.tool.args)+')</span>':'')+'</div>';
+      if(m.role==="toolResult")
+        return '<div class="msg msg-tool"><span class="role">toolResult · '+esc(m.toolName)+'</span>'+
+          '<span class="mono" style="font-size:12px">'+esc(m.content)+'</span></div>';
+      return '<div class="msg msg-'+m.role+'"><span class="role">'+m.role+'</span>'+esc(m.content)+'</div>';
+    }).join("");
+    msgsBox.scrollTop=msgsBox.scrollHeight;
+  }
+  function finish(){
+    state="done";nextBtn.disabled=true;nextBtn.textContent="✓ loop 结束";
+    clearInterval(autoTimer);autoTimer=null;
+    phase.innerHTML='<b style="color:var(--accent2)">agent_end</b> —— 最后一个 turn 没有 toolCall，内外层循环都退出。任务完成。';
+    srcRef.textContent='对应：runLoop 末尾 emit({ type: "agent_end" })';
+  }
+  function step(){
+    if(state==="done"||busy)return;
+    if(state==="init"){
+      messages.push({role:"user",content:task.user});
+      state="turn_begin";
+      phase.innerHTML="<b>agent_start</b> —— 用户消息已进入 context。点“执行下一步”开始第一个 turn。";
+      srcRef.textContent="对应：runAgentLoop 注入 prompt";
+      render();return;
+    }
+    // 每个 turn 都先停一拍，明确宣告“第 N 个 turn 开始”
+    if(state==="turn_begin"){
+      turn++;turnEl.textContent=turn;flagEl.textContent="—";
+      state="turn_stream";
+      phase.innerHTML="<b>turn_start · 第 "+turn+" 个 turn</b> —— 内层循环新的一圈开始了。下一步：调用 LLM。";
+      srcRef.textContent="对应：runLoop 内层 while 顶部 → emit turn_start";
+      return;
+    }
+    const t=task.turns[turnIdx];
+    if(state==="turn_stream"){
+      state="streaming";
+      phase.innerHTML="<b>① streamAssistantResponse()</b> —— 第 "+turn+" 个 turn 调用 LLM，流式产出 assistant 消息…";
+      srcRef.textContent="对应：runLoop ① const message = await streamAssistantResponse(...)";
+      const aMsg={role:"assistant",turn:turn,think:"",text:"",tool:null};
+      messages.push(aMsg);render();
+      const bubble=msgsBox.querySelector(".msg-assistant:last-child");
+      const textDiv=bubble.querySelector("div");
+      textDiv.classList.add("cursor-blink");
+      busy=true;nextBtn.disabled=true;
+      let ci=0;
+      const tw=setInterval(()=>{
+        if(ci>=t.text.length){
+          clearInterval(tw);textDiv.classList.remove("cursor-blink");
+          aMsg.think=t.think;aMsg.text=t.text;aMsg.tool=t.tool;render();
+          busy=false;nextBtn.disabled=false;state="check_tool";
+          phase.innerHTML="<b>② 检查 toolCall</b> —— assistant 消息生成完毕，过滤 content 里的 toolCall。";
+          srcRef.textContent='对应：runLoop ② message.content.filter(c => c.type === "toolCall")';
+          return;
+        }
+        textDiv.textContent+=t.text[ci++];
+      },20);
+      return;
+    }
+    if(state==="check_tool"){
+      if(t.tool){
+        flagEl.textContent="true";state="tool_exec";
+        phase.innerHTML="发现 1 个 toolCall（<span class='tcall'>"+esc(t.tool.name)+"</span>）。hasMoreToolCalls = true —— loop 还得继续转。";
+        srcRef.textContent="对应：runLoop ③ executeToolCalls(...) 即将执行";
+      }else{
+        flagEl.textContent="false";state="turn_end_final";
+        phase.innerHTML="本 turn 的 assistant 消息<b>不含 toolCall</b>。hasMoreToolCalls = false —— loop 准备退出。";
+        srcRef.textContent="对应：runLoop ④ toolCalls.length === 0";
+      }
+      return;
+    }
+    if(state==="tool_exec"){
+      messages.push({role:"toolResult",toolName:t.tool.name,content:t.result});
+      state="turn_end";
+      phase.innerHTML="<b>③ 工具执行完毕</b> —— "+esc(t.tool.name)+" 的结果作为 toolResult 回填进 context。";
+      srcRef.textContent="对应：runLoop ③ currentContext.messages.push(result)";
+      render();return;
+    }
+    if(state==="turn_end"){
+      turnIdx++;state="turn_begin";
+      phase.innerHTML="<b>turn_end · 第 "+turn+" 个 turn 结束</b> —— 还有工具结果要喂回去，<b>回到内层循环顶部</b>。点“执行下一步”开下一个 turn。";
+      srcRef.textContent="对应：emit turn_end → 内层 while 条件成立 → 再转一圈";
+      return;
+    }
+    if(state==="turn_end_final"){
+      phase.innerHTML="<b>turn_end · 第 "+turn+" 个 turn 结束</b> —— 没有 toolCall，内层 while 退出。";
+      srcRef.textContent="对应：内层 while 条件不成立 → 检查 follow-up（无）→ break";
+      state="check_followup";return;
+    }
+    if(state==="check_followup"){finish();return;}
+  }
+  nextBtn.onclick=step;
+  document.getElementById("c4-auto").onclick=()=>{
+    if(autoTimer){clearInterval(autoTimer);autoTimer=null;return;}
+    autoTimer=setInterval(()=>{
+      if(state==="done"){clearInterval(autoTimer);autoTimer=null;return;}
+      if(!busy)step();
+    },650);
+  };
+  document.getElementById("c4-reset").onclick=reset;
+  taskSel.onchange=reset;
+  reset();
+}
+function initC5(){
+  const evBox=document.getElementById("c5-events");
+  const uiBox=document.getElementById("c5-ui");
+  const runBtn=document.getElementById("c5-run");
+  if(!evBox)return;
+  const SCRIPT=[
+    {ev:"agent_start",cls:"evt-agent",ui:s=>s.status="running"},
+    {ev:"turn_start",cls:"evt-turn",ui:s=>s.turn=1},
+    {ev:"message_start (user)",cls:"evt-msg",ui:s=>s.items.push({t:"user",text:"读 config.json 并总结"})},
+    {ev:"message_end (user)",cls:"evt-msg",ui:null},
+    {ev:"message_start (assistant)",cls:"evt-msg",ui:s=>s.items.push({t:"assistant",text:"",streaming:true})},
+    {ev:"message_update · text_delta ×N",cls:"evt-msg",ui:s=>s.items[s.items.length-1].text="我先读取这个文件。"},
+    {ev:"message_update · toolcall_end",cls:"evt-msg",ui:s=>s.items[s.items.length-1].tool="read_file"},
+    {ev:"message_end (assistant)",cls:"evt-msg",ui:s=>s.items[s.items.length-1].streaming=false},
+    {ev:"tool_execution_start · read_file",cls:"evt-tool",ui:s=>s.items.push({t:"tool",text:"read_file 执行中…",running:true})},
+    {ev:"tool_execution_end · read_file",cls:"evt-tool",ui:s=>{const x=s.items[s.items.length-1];x.text='read_file → { "port": 8080 }';x.running=false;}},
+    {ev:"message_start (toolResult)",cls:"evt-msg",ui:null},
+    {ev:"message_end (toolResult)",cls:"evt-msg",ui:null},
+    {ev:"turn_end (turn 1)",cls:"evt-turn",ui:null},
+    {ev:"turn_start",cls:"evt-turn",ui:s=>s.turn=2},
+    {ev:"message_start (assistant)",cls:"evt-msg",ui:s=>s.items.push({t:"assistant",text:"",streaming:true})},
+    {ev:"message_update · text_delta ×N",cls:"evt-msg",ui:s=>s.items[s.items.length-1].text="config.json 里端口配置为 8080。"},
+    {ev:"message_end (assistant)",cls:"evt-msg",ui:s=>s.items[s.items.length-1].streaming=false},
+    {ev:"turn_end (turn 2)",cls:"evt-turn",ui:null},
+    {ev:"agent_end",cls:"evt-agent",ui:s=>s.status="done"},
+  ];
+  function renderUI(s){
+    let h='<div style="font-size:11px;color:var(--dim);margin-bottom:7px">状态 '+
+      '<span class="badge '+(s.status==="done"?"b-green":s.status==="running"?"b-blue":"b-gray")+'">'+s.status+
+      '</span> &nbsp; turn <span class="badge b-green">'+s.turn+'</span></div>';
+    s.items.forEach(it=>{
+      if(it.t==="user")h+='<div class="msg msg-user"><span class="role">user</span>'+esc(it.text)+'</div>';
+      else if(it.t==="assistant")h+='<div class="msg msg-assistant"><span class="role">assistant'+
+        (it.streaming?' <span class="badge b-gray">streaming…</span>':'')+'</span>'+esc(it.text)+
+        (it.tool?'<br><span class="tcall">→ toolCall: '+esc(it.tool)+'</span>':'')+'</div>';
+      else if(it.t==="tool")h+='<div class="msg msg-tool"><span class="role">tool'+
+        (it.running?' <span class="badge b-gray pulse">running</span>':'')+'</span>'+
+        '<span class="mono" style="font-size:12px">'+esc(it.text)+'</span></div>';
+    });
+    uiBox.innerHTML=h;
+  }
+  runBtn.onclick=()=>{
+    evBox.innerHTML="";
+    const s={status:"idle",turn:0,items:[]};
+    renderUI(s);runBtn.disabled=true;
+    let i=0;
+    const timer=setInterval(()=>{
+      if(i>=SCRIPT.length){clearInterval(timer);runBtn.disabled=false;return;}
+      const e=SCRIPT[i++];
+      const d=document.createElement("div");
+      d.className="evt "+e.cls;
+      d.innerHTML='<span class="evt-dot"></span>'+esc(e.ev);
+      evBox.appendChild(d);evBox.scrollTop=evBox.scrollHeight;
+      if(e.ui){e.ui(s);renderUI(s);}
+      uiBox.scrollTop=uiBox.scrollHeight;
+    },620);
+  };
+}
+function initC6(){
+  const phase=document.getElementById("c6-phase");
+  const msgsBox=document.getElementById("c6-msgs");
+  const runBtn=document.getElementById("c6-run");
+  const steerBtn=document.getElementById("c6-steer");
+  if(!msgsBox)return;
+  let messages,steerQueue,running,turn;
+  function reset(){
+    messages=[];steerQueue=[];running=false;turn=0;
+    runBtn.disabled=false;steerBtn.disabled=true;
+    phase.innerHTML="点“启动 agent”开始。";render();
+  }
+  function render(){
+    if(messages.length===0){msgsBox.innerHTML='<div style="color:var(--dim);font-size:12px">[] 空</div>';return;}
+    msgsBox.innerHTML=messages.map(m=>{
+      const cls=m.role==="steer"?"msg-steer":"msg-"+m.role;
+      const label=m.role==="steer"?"user · steering 注入":m.role;
+      let inner=esc(m.content||"");
+      if(m.tool)inner+='<br><span class="tcall">→ toolCall: '+esc(m.tool)+'</span>';
+      return '<div class="msg '+cls+'"><span class="role">'+label+'</span>'+inner+'</div>';
+    }).join("");
+    msgsBox.scrollTop=msgsBox.scrollHeight;
+  }
+  const TURNS=[
+    {text:"开始分析任务。我先列出目录。",tool:"list_files"},
+    {text:"继续检查相关文件。",tool:"read_file"},
+    {text:"检查配置文件。",tool:"read_file"},
+    {text:"完成分析。",tool:null},
+  ];
+  function runTurn(idx){
+    if(!running)return;
+    if(steerQueue.length>0){
+      phase.innerHTML='<b style="color:var(--warn)">turn '+(turn+1)+' 开始前</b> —— 检测到 steering 队列有消息，先注入 context！';
+      steerQueue.forEach(x=>messages.push({role:"steer",content:x}));
+      steerQueue=[];render();
+      setTimeout(()=>{if(running)doTurn(idx);},1100);
+      return;
+    }
+    doTurn(idx);
+  }
+  function doTurn(idx){
+    if(!running)return;
+    if(idx>=TURNS.length){
+      running=false;steerBtn.disabled=true;
+      phase.innerHTML='<b style="color:var(--accent2)">agent_end</b> —— 最后一个 turn 无 toolCall，loop 结束。';
+      return;
+    }
+    turn++;
+    const t=TURNS[idx];
+    messages.push({role:"assistant",content:t.text,tool:t.tool});render();
+    phase.innerHTML="<b>turn "+turn+"</b> 运行中"+(t.tool?"（调用 "+t.tool+"）":"（无工具，准备结束）")+
+      "… 现在可点“插入 steering 消息”。";
+    if(t.tool)messages.push({role:"toolResult",content:"（"+t.tool+" 的执行结果）"});
+    setTimeout(()=>{if(running){render();runTurn(idx+1);}},1400);
+  }
+  runBtn.onclick=()=>{
+    if(running)return;
+    reset();
+    running=true;runBtn.disabled=true;steerBtn.disabled=false;turn=0;
+    messages.push({role:"user",content:"分析这个项目的结构"});render();
+    phase.innerHTML="agent 已启动，正在运行 turn…";
+    setTimeout(()=>runTurn(0),900);
+  };
+  steerBtn.onclick=()=>{
+    if(!running)return;
+    steerQueue.push("等一下，重点看 src/ 目录就行");
+    phase.innerHTML='⚡ steering 消息已进入<b>队列</b>。它不会立刻打断当前 turn，而是在<b>下一个 turn 开始前</b>被注入。';
+  };
+  document.getElementById("c6-reset").onclick=reset;
+  reset();
+}
+
+/* ========== 启动 ========== */
+renderSidebar();
+gotoLevel(0,0);
+</script>
+</body>
+</html>
